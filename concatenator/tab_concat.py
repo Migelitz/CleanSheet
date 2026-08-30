@@ -10,25 +10,58 @@ from tkinterdnd2 import DND_FILES
 # DATA PROCESSING FUNCTIONS
 # ========================================================
 
+def stream_to_csv(
+    files: list[str],
+    output_path: Path,
+    chunksize: int = 50_000
+) -> int:
+    
+    """Streams CSV and Excel files into a single CSV file in chunks to minimize RAM."""
+    total_rows = 0
+    is_first_write = True
 
-def read_file(filepath: str) -> pd.DataFrame:
-    """Reads a CSV or Excel file into a pandas DataFrame."""
-    extension = Path(filepath).suffix.lower()
+    for filepath in files:
+        extension = Path(filepath).suffix.lower()
 
-    if extension == ".csv":
-        return pd.read_csv(filepath)
+        if extension == ".csv":
+            # Stream CSV in chunks to avoid loading full dataset into memory
+            for chunk in pd.read_csv(filepath, chunksize=chunksize):
 
-    elif extension in [".xlsx", ".xls"]:
-        return pd.read_excel(filepath)
+                chunk.to_csv(
+                    output_path,
+                    mode="w" if is_first_write else "a",
+                    header=is_first_write,
+                    index=False
+                )
+                total_rows += len(chunk)
+                is_first_write = False
 
-    else:
-        raise ValueError(f"Unsupported format: {extension}")
+        elif extension in [".xlsx", ".xls"]:
+            # Load individual excel file, write immediately, then free memory
+            df = pd.read_excel(filepath, engine="calamine")
 
+            df.to_csv(
+                output_path,
+                mode="w" if is_first_write else "a",
+                header=is_first_write,
+                index=False
+            )
+            total_rows += len(df)
+            is_first_write = False
+
+        else:
+            raise ValueError(f"Unsupported format: {extension}")
+
+    return total_rows
 
 def concat_files(
-    files: list[str], output_folder: str, output_filename: str
+    files: list[str],
+    output_folder: str,
+    output_filename: str,
+    chunksize: int = 50_000
 ) -> None:
-    """Merges all files and saves them to the specified directory."""
+    
+    """Merges all files directly to disk and saves them to the specified directory."""
     if not files:
         messagebox.showwarning(
             "No Files Selected", "Please select at least one file to merge."
@@ -54,26 +87,61 @@ def concat_files(
     extension = output_path.suffix.lower()
 
     try:
-        # Load and combine all datasets
-        merged_df = pd.concat(
-            (read_file(filepath) for filepath in files), ignore_index=True
-        )
-
-        # Determine export format
-        if extension in [".xlsx", ".xls"]:
-            merged_df.to_excel(
-                output_path,
-                index=False,
-            )
-
-        else:
+        # Default destination format to CSV if extension is unspecified or non-excel
+        # Protect the program from crashing from the user who enters output name with other file extension like .txt
+        if extension not in [".xlsx", ".xls"]:
             if extension != ".csv":
                 output_path = output_path.with_suffix(".csv")
 
-            merged_df.to_csv(
+            stream_to_csv(files=files, output_path=output_path, chunksize=chunksize)
+            
+        else:
+            # Excel export: Stream to temporary CSV first, then convert one-by-one
+            # to prevent keeping all DataFrames in memory simultaneously
+            temp_csv = folder_path / f"~temp_{clean_filename}.csv"
+            stream_to_csv(files=files, output_path=temp_csv, chunksize=chunksize)
+
+            with pd.ExcelWriter(
                 output_path,
-                index=False,
-            )
+                engine="xlsxwriter",
+                engine_kwargs={'options': {'constant_memory': True}}
+                ) as writer:
+
+                current_row = 0
+
+                for chunk in pd.read_csv(temp_csv, chunksize=chunksize):
+
+                    if current_row + len(chunk) > 1_048_576:
+                        messagebox.showwarning(
+                            "Excel Row Limit",
+                            "Merged data exceeds Excel's row limit of 1,048,576 rows. "
+                            "Only the first 1,048,576 rows will be saved to the Excel file. "
+                            "Please consider exporting to CSV for larger datasets.",
+                        )
+
+                        remaining_rows = 1_048_576 - current_row
+                        if remaining_rows > 0:
+                            chunk.iloc[:remaining_rows].to_excel(   # [:remaining_rows] is panda slicing to limit the number of rows written to Excel
+                                writer,
+                                index=False,
+                                startrow=current_row,
+                                header=current_row == 0 # If start of file, write header; otherwise, skip header
+                            )
+
+                        # If the row limit is reached, break out of the loop to stop writing more data
+                        break
+
+                    chunk.to_excel(
+                        writer,
+                        index=False,
+                        startrow=current_row,
+                        header=current_row == 0
+                    )
+                    current_row += len(chunk)
+
+            # Delete temp_csv file after using
+            if temp_csv.exists():
+                temp_csv.unlink()
 
         messagebox.showinfo(
             "Success",
@@ -160,13 +228,28 @@ def build_concatenator_tab(parent_frame) -> None:
         orient="vertical",
         command=file_listbox.yview,
     )
+    horizontal_scrollbar = ttk.Scrollbar(
+        list_container,
+        orient="horizontal",
+        command=file_listbox.xview
+    )
+
     vertical_scrollbar.grid(
         row=0,
         column=1,
         sticky="ns",
     )
+    horizontal_scrollbar.grid(
+        row=1,
+        column=0,
+        sticky="ew"
+    )
 
-    file_listbox.configure(yscrollcommand=vertical_scrollbar.set)
+
+    file_listbox.configure(
+        yscrollcommand=vertical_scrollbar.set,
+        xscrollcommand=horizontal_scrollbar.set
+    )
 
     # ========================================================
     # FILE MANAGEMENT HELPERS
@@ -184,6 +267,17 @@ def build_concatenator_tab(parent_frame) -> None:
                 file_listbox.insert(
                     tk.END,
                     Path(clean_path).name,
+                )
+            elif extension not in valid_extensions:
+                messagebox.showwarning(
+                    "Unsupported File Type",
+                    f"The file '{Path(clean_path).name}' has an unsupported format.\n\n"
+                    "Supported formats are: CSV (.csv), Excel (.xlsx, .xls)."
+                )
+            elif clean_path in uploaded_files:
+                messagebox.showinfo(
+                    "Duplicate File",
+                    f"The file '{Path(clean_path).name}' has already been added."
                 )
 
     def select_files() -> None:
@@ -203,8 +297,13 @@ def build_concatenator_tab(parent_frame) -> None:
         selected_indexes = list(file_listbox.curselection())
 
         if not selected_indexes:
+            messagebox.showinfo(
+                "No Selection",
+                "Please select at least one file to remove from the list."
+            )
             return
 
+        # TODO: Clarification if it really keeps the indexes accurate. I think it does not. Check if it works properly.
         # Delete in reverse order to keep indexes accurate
         for index in reversed(selected_indexes):
             file_listbox.delete(index)
@@ -241,7 +340,8 @@ def build_concatenator_tab(parent_frame) -> None:
     ttk.Button(
         button_frame,
         text="Add Files",
-        command=select_files,
+        cursor="hand2",
+        command=select_files
     ).pack(
         side="left",
         padx=(0, 5),
@@ -250,7 +350,8 @@ def build_concatenator_tab(parent_frame) -> None:
     ttk.Button(
         button_frame,
         text="Remove Selected",
-        command=remove_selected_files,
+        cursor="hand2",
+        command=remove_selected_files
     ).pack(
         side="left",
         padx=(0, 5),
@@ -259,7 +360,8 @@ def build_concatenator_tab(parent_frame) -> None:
     ttk.Button(
         button_frame,
         text="Clear All",
-        command=clear_all_files,
+        cursor="hand2",
+        command=clear_all_files
     ).pack(side="left")
 
     # ========================================================
@@ -276,7 +378,7 @@ def build_concatenator_tab(parent_frame) -> None:
         sticky="nsew",
     )
 
-    right_frame.rowconfigure(4, weight=1)  # Spacer to keep Concat pinned bottom
+    right_frame.rowconfigure(6, weight=1)  # Spacer to keep Concat pinned bottom
     right_frame.columnconfigure(0, weight=1)
 
     # ----- Output File Name -----
@@ -322,13 +424,9 @@ def build_concatenator_tab(parent_frame) -> None:
     )
     destination_frame.columnconfigure(0, weight=1)
 
-    folder_path_var = tk.StringVar(value=str(Path.cwd()))
-
-    folder_entry = ttk.Entry(
-        destination_frame,
-        textvariable=folder_path_var,
-    )
-    folder_entry.grid(
+    folder_path_entry = ttk.Entry(destination_frame)
+    folder_path_entry.insert(0, str(Path.cwd()))
+    folder_path_entry.grid(
         row=0,
         column=0,
         sticky="ew",
@@ -338,26 +436,100 @@ def build_concatenator_tab(parent_frame) -> None:
     def select_destination_folder() -> None:
         chosen_dir = filedialog.askdirectory(
             title="Select Save Directory",
-            initialdir=folder_path_var.get(),
+            initialdir=folder_path_entry.get(),
         )
 
         if chosen_dir:
-            folder_path_var.set(chosen_dir)
+            folder_path_entry.set(chosen_dir)
 
     ttk.Button(
         destination_frame,
         text="Browse...",
-        command=select_destination_folder,
+        cursor="hand2",
+        command=select_destination_folder
     ).grid(
         row=0,
         column=1,
         sticky="e",
     )
 
+    # ----- Chunk Size Entry -----
+
+    chunk_size_label = ttk.Label(
+        right_frame,
+        text="Chunk Size (rows):",
+        font=("TkDefaultFont", 10, "bold"),
+    )
+    chunk_size_label.grid(
+        row=4,
+        column=0,
+        sticky="w",
+        pady=(0, 4)
+    )
+
+    tooltip_label = ttk.Button(
+        right_frame,
+        text="ⓘ",
+        style="Toolbutton",
+        cursor="hand2",
+        command=lambda: messagebox.showinfo(
+            "Chunk Size Information",
+            "The chunk size determines how many rows are processed at a time during the merge.\n\n"
+            "Larger chunk sizes may speed up processing but use more memory.\n"
+            "Smaller chunk sizes reduce memory usage but may take longer to complete.\n\n"
+            "Default chunk size is 50,000 rows. You can adjust this value based on your system's memory capacity and the size of the files being merged."
+        )
+    )
+    tooltip_label.grid(
+        row=4,
+        column=0,
+        sticky="e",
+        pady=(0, 4)
+    )
+
+    chunk_size_frame = ttk.Frame(right_frame)
+    chunk_size_frame.grid(
+        row=5,
+        column=0,
+        sticky="ew"
+    )
+    chunk_size_frame.columnconfigure(0, weight=1)
+
+    chunk_size_entry = ttk.Entry(chunk_size_frame)
+    chunk_size_entry.insert(0, "50000")
+    chunk_size_entry.grid(
+        row=0,
+        column=0,
+        sticky="ew",
+        padx=(0, 6)
+    )
+
+    ttk.Button(
+        chunk_size_frame,
+        cursor="hand2",
+        text="Set Chunk Size",
+        command=lambda: messagebox.showinfo(
+            "Chunk Size Set",
+            f"Chunk size set to {chunk_size_entry.get()} rows."
+        )
+    ).grid(
+        row=0,
+        column=1,
+        sticky="e",
+    )
+
+    chunk_size_entry.bind(
+        "<Return>",
+        lambda event: messagebox.showinfo(
+            "Chunk Size Set",
+            f"Chunk size set to {chunk_size_entry.get()} rows."
+        )
+    )
+
     # ----- Vertical Spacer -----
 
     ttk.Frame(right_frame).grid(
-        row=4,
+        row=6,
         column=0,
         sticky="nsew",
     )
@@ -367,17 +539,19 @@ def build_concatenator_tab(parent_frame) -> None:
     def on_concat_click() -> None:
         concat_files(
             files=uploaded_files,
-            output_folder=folder_path_var.get(),
+            output_folder=folder_path_entry.get(),
             output_filename=output_entry.get(),
+            chunksize=int(chunk_size_entry.get())
         )
 
     concat_button = ttk.Button(
         right_frame,
-        text="Concatenate File/s",
-        command=on_concat_click,
+        text="Concatenate Files",
+        cursor="hand2",
+        command=on_concat_click
     )
     concat_button.grid(
-        row=5,
+        row=7,
         column=0,
         sticky="ew",
         ipady=6,
