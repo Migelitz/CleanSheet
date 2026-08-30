@@ -1,10 +1,13 @@
+import tkinter as tk
+
+from pathlib import Path
 from tkinter import ttk
 from tkinterdnd2 import TkinterDnD
 
 from concatenator.tab_concat import build_concatenator_tab
 from quality.tab_quality import build_quality_checker_tab
 from cleaner.tab_cleaner import build_cleaner_tab
-
+from about.tab_about import build_about_tab
 
 def center_window(window: TkinterDnD.Tk, width: int, height: int) -> None:
     screen_width = window.winfo_screenwidth()
@@ -18,8 +21,12 @@ def center_window(window: TkinterDnD.Tk, width: int, height: int) -> None:
 
 def main() -> None:
     root = TkinterDnD.Tk()
-    root.title("Data Utility Hub")
+    root.title("CleanSheet")
 
+    # Window icon TODO: Test if icon appears even in window
+    icon = tk.PhotoImage(file="assets/cleansheet_logo.png")
+    root.iconphoto(True, icon)
+    
     # Center window with specific width and height
     center_window(root, width=800, height=480)
     root.minsize(650, 380)
@@ -30,14 +37,17 @@ def main() -> None:
     concat_tab = ttk.Frame(notebook)
     quality_tab = ttk.Frame(notebook)
     cleaner_tab = ttk.Frame(notebook)
+    about_tab = ttk.Frame(notebook)
 
     notebook.add(concat_tab, text="Spreadsheet Concatenator")
     notebook.add(quality_tab, text="Data Quality Checker")
     notebook.add(cleaner_tab, text="Spreadsheet Cleaner")
+    notebook.add(about_tab, text="About")
 
     build_concatenator_tab(concat_tab)
     build_quality_checker_tab(quality_tab)
     build_cleaner_tab(cleaner_tab)
+    build_about_tab(about_tab)
 
     root.mainloop()
 

@@ -109,7 +109,7 @@ def build_cleaner_tab(parent_frame: ttk.Frame) -> None:
         extension = Path(filepath).suffix.lower()
 
         if extension == ".csv":
-                df = pd.read_csv(filepath, chunksize=100_000)
+                df = pd.read_csv(filepath, chunksize=50_000)
 
         elif extension in [".xlsx", ".xls"]:
             df = pd.read_excel(filepath)
@@ -188,9 +188,7 @@ def build_cleaner_tab(parent_frame: ttk.Frame) -> None:
             sticky="ns"
         )
 
-        canvas.configure(
-            yscrollcommand=scrollbar.set
-        )
+        canvas.configure(yscrollcommand=scrollbar.set)
 
         # Frame that will contain the column rows
         columns_frame = ttk.Frame(canvas)
