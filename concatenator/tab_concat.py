@@ -14,10 +14,9 @@ def stream_to_csv(
     files: list[str],
     output_path: Path,
     chunksize: int = 50_000
-) -> int:
+) -> None:
     
     """Streams CSV and Excel files into a single CSV file in chunks to minimize RAM."""
-    total_rows = 0
     is_first_write = True
 
     for filepath in files:
@@ -33,7 +32,6 @@ def stream_to_csv(
                     header=is_first_write,
                     index=False
                 )
-                total_rows += len(chunk)
                 is_first_write = False
 
         elif extension in [".xlsx", ".xls"]:
@@ -46,13 +44,12 @@ def stream_to_csv(
                 header=is_first_write,
                 index=False
             )
-            total_rows += len(df)
             is_first_write = False
 
         else:
             raise ValueError(f"Unsupported format: {extension}")
 
-    return total_rows
+    return
 
 def concat_files(
     files: list[str],
