@@ -7,8 +7,8 @@ To ensure the concatenation engine can merge massive, multi-gigabyte exports on 
 ### 🖥️ Benchmarking Environment
 
 * **Platform:** Linux (Google Colab standard CPU instance — 2 vCPUs, 12 GB RAM)
-* **Profiling Tools:** Python standard library `tracemalloc` (peak process memory) and `time.perf_counter()` (execution time)
-* **Methodology:** Isolated environment to eliminate local OS background noise and measure purely deterministic process allocation.
+* **Profiling Tools:** Python standard library `tracemalloc` (peak Python-tracked memory allocation) and `time.perf_counter()` (execution time)
+* **Methodology:** Isolated environment to eliminate local OS background noise and measure Python-level memory allocation and execution time in an isolated environment.
 
 ### 📊 The Stress Test Datasets
 
@@ -31,13 +31,13 @@ The concatenator was benchmarked against two distinct heavy-load scenarios to te
 ### 🏗️ Architecture Decisions
 
 **1. Stream-to-Disk Chunking**
-Instead of loading massive files into RAM simultaneously ($O(N)$ space complexity), the concatenator streams datasets into Pandas via parameterized chunks. It appends data directly to the disk output, allowing multi-gigabyte files to be processed with a flat memory footprint.
+CSV files are processed using parameterized Pandas chunks and written directly to disk, keeping memory usage largely independent of total CSV file size. Excel files are currently loaded into memory with the Calamine engine before being written to CSV.
 
 **2. Rust-Based Excel Parsing (XLSX)**
-Standard Excel parsing (`openpyxl`) must load entire XML trees into memory, creating severe memory and CPU bottlenecks. We integrated the **Calamine** engine (a Rust-based Excel reader) to drastically accelerate parsing while capping memory bloat.
+XLSX/XLS files are currently parsed using Pandas with the Calamine engine. Calamine provides a fast Rust-based parser and reduces parsing overhead compared with the previous approach. Excel files are still loaded into an in-memory DataFrame during ingestion; chunked Excel ingestion is outside the scope of V1.0.0.
 
 **3. Constant-Memory Excel Exporting**
-Writing large merged datasets back into `.xlsx` format is traditionally memory-intensive. The engine writes to a temporary CSV first, then streams chunks into `xlsxwriter` using the `constant_memory=True` flag. This writes row-by-row directly to the hard drive, bypassing RAM bottlenecks entirely and intercepting Excel's 1,048,576 row limit safely.
+Writing large merged datasets back into .xlsx format is traditionally memory-intensive. The engine writes to a temporary CSV first, then streams chunks into XlsxWriter using constant_memory=True. This substantially reduces the memory required during XLSX generation by avoiding construction of the entire output workbook in memory.
 
 **4. Native Memory Management**
 Profiling revealed that forcing garbage collection (`gc.collect()`) after file processing introduced massive CPU overhead. Relying strictly on Python's native reference counting proved to be the most performant architecture, keeping RAM low without the CPU penalty.
@@ -47,7 +47,7 @@ Profiling revealed that forcing garbage collection (`gc.collect()`) after file p
 Testing was conducted using Python's built-in `tracemalloc` and `time.perf_counter()`.
 
 **Ingestion & Parsing Trade-offs (Scenario A)**
-| Engine | Chunk Size | Execution Time | Peak Memory (RAM) |
+| Engine | Chunk Size | Execution Time | Peak Python-Tracked Memory (RAM) |
 | :--- | :--- | :--- | :--- |
 | **Calamine** | 100,000 rows | 83.53 sec | 1,765.73 MB |
 | **Calamine** | 20,000 rows | 80.79 - 92.75 sec | 448.80 MB |
@@ -55,7 +55,7 @@ Testing was conducted using Python's built-in `tracemalloc` and `time.perf_count
 
 **Excel Merging & Export (Scenario B)**
 Merging four `.xlsx` files (~141,000 combined rows) and exporting them natively back to `.xlsx`. By parameterizing the chunk size across both the read and write phases, the Space-Time trade-off is clearly visible:
-| Export Engine | Chunk Size | Execution Time (Avg) | Peak Memory (Stable) |
+| Export Engine | Chunk Size | Execution Time (Avg) | Peak Python-Tracked Memory (Stable) |
 | :--- | :--- | :--- | :--- |
 | **`xlsxwriter` (constant memory)** | 30,000 rows | ~66.88 sec | **104.47 MB** |
 | **`xlsxwriter` (constant memory)** | 50,000 rows | ~63.82 sec | 113.36 MB |
@@ -64,6 +64,6 @@ Merging four `.xlsx` files (~141,000 combined rows) and exporting them natively 
 ### 🧠 Engineering Takeaways
 
 1. **The Write Bottleneck Solved:** By utilizing `xlsxwriter`'s constant memory streaming, the engine merged over 140,000 rows of Excel data while maintaining a microscopic memory footprint as low as ~104 MB.
-2. **The Sweet Spot:** A chunk size of 50,000 provides the optimal balance across both read and write operations—processing gigabytes of data rapidly while strictly capping memory usage under safe thresholds for consumer hardware. 
+2. **The Sweet Spot:** A chunk size of 50,000 provided the best balance in the tested workloads, offering good processing speed while keeping Python-tracked memory usage relatively low for consumer hardware.
 
-**Conclusion:** The CleanSheet Concatenator module safely scales to multi-gigabyte datasets and heavy Excel workflows on standard hardware without freezing the host machine's operating system.
+**Conclusion:** The V1.0.0 concatenation pipeline demonstrates low-memory, chunked processing for large CSV datasets and memory-efficient XLSX export. Excel ingestion currently uses an in-memory DataFrame and therefore remains dependent on available system memory. Further out-of-core Excel processing is planned for a future optimization pass.
