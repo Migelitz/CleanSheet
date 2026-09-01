@@ -8,7 +8,7 @@ To ensure the concatenation engine can merge massive, multi-gigabyte exports on 
 
 * **Platform:** Linux (Google Colab standard CPU instance — 2 vCPUs, 12 GB RAM)
 * **Profiling Tools:** Python standard library `tracemalloc` (peak Python-tracked memory allocation) and `time.perf_counter()` (execution time)
-* **Methodology:** Isolated environment to eliminate local OS background noise and measure Python-level memory allocation and execution time in an isolated environment.
+* **Methodology:** Isolated environment to minimize local OS background noise and measure Python-level memory allocation and execution time.
 
 ### 📊 The Stress Test Datasets
 
@@ -31,7 +31,7 @@ The concatenator was benchmarked against two distinct heavy-load scenarios to te
 ### 🏗️ Architecture Decisions
 
 **1. Stream-to-Disk Chunking**
-CSV files are processed using parameterized Pandas chunks and written directly to disk, keeping memory usage largely independent of total CSV file size. Excel files are currently loaded into memory with the Calamine engine before being written to CSV.
+CSV files are processed using parameterized Pandas chunks and written directly to disk, keeping peak largely independent of total CSV file size. Excel files are currently loaded into memory with the Calamine engine before being written to CSV.
 
 **2. Rust-Based Excel Parsing (XLSX)**
 XLSX/XLS files are currently parsed using Pandas with the Calamine engine. Calamine provides a fast Rust-based parser and reduces parsing overhead compared with the previous approach. Excel files are still loaded into an in-memory DataFrame during ingestion; chunked Excel ingestion is outside the scope of V1.0.0.
