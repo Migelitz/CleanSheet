@@ -1,5 +1,6 @@
 import pandas as pd
 import tkinter as tk
+import time
 
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
@@ -534,12 +535,16 @@ def build_concatenator_tab(parent_frame) -> None:
     # ----- Concat Action Button -----
 
     def on_concat_click() -> None:
+        concat_button.config(state=tk.DISABLED, text="Merging...")
+
         concat_files(
             files=uploaded_files,
             output_folder=folder_path_entry.get(),
             output_filename=output_entry.get(),
             chunksize=int(chunk_size_entry.get())
         )
+
+        concat_button.config(state=tk.NORMAL, text="Concatenate Files")
 
     concat_button = ttk.Button(
         right_frame,
