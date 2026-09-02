@@ -301,8 +301,8 @@ def build_concatenator_tab(parent_frame) -> None:
             )
             return
 
-        # TODO: Clarification if it really keeps the indexes accurate. I think it does not. Check if it works properly.
         # Delete in reverse order to keep indexes accurate
+        # Why? Because if you delete from the start, the indexes of the remaining items shift, leading to potential errors or skipped deletions. Deleting from the end ensures that the indexes of the items you want to delete remain valid as you remove them.
         for index in reversed(selected_indexes):
             file_listbox.delete(index)
             uploaded_files.pop(index)
@@ -465,7 +465,7 @@ def build_concatenator_tab(parent_frame) -> None:
         pady=(0, 4)
     )
 
-    tooltip_label = ttk.Button(
+    tooltip_button = ttk.Button(
         right_frame,
         text="ⓘ",
         style="Toolbutton",
@@ -478,7 +478,7 @@ def build_concatenator_tab(parent_frame) -> None:
             "Default chunk size is 50,000 rows. You can adjust this value based on your system's memory capacity and the size of the files being merged."
         )
     )
-    tooltip_label.grid(
+    tooltip_button.grid(
         row=4,
         column=0,
         sticky="e",
