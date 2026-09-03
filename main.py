@@ -1,13 +1,13 @@
 import tkinter as tk
-
-from pathlib import Path
 from tkinter import ttk
+
 from tkinterdnd2 import TkinterDnD
 
+from about.tab_about import build_about_tab
+from cleaner.tab_cleaner import build_cleaner_tab
 from concatenator.tab_concat import build_concatenator_tab
 from quality.tab_quality import build_quality_checker_tab
-from cleaner.tab_cleaner import build_cleaner_tab
-from about.tab_about import build_about_tab
+
 
 def center_window(window: TkinterDnD.Tk, width: int, height: int) -> None:
     screen_width = window.winfo_screenwidth()

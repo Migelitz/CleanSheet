@@ -1,11 +1,9 @@
-import pandas as pd
 import tkinter as tk
-import time
-
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
-from tkinterdnd2 import DND_FILES
 
+import pandas as pd
+from tkinterdnd2 import DND_FILES
 
 # ========================================================
 # DATA PROCESSING FUNCTIONS
@@ -50,7 +48,6 @@ def stream_to_csv(
         else:
             raise ValueError(f"Unsupported format: {extension}")
 
-    return
 
 def concat_files(
     files: list[str],

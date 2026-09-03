@@ -1,11 +1,12 @@
-import pandas as pd
 import tkinter as tk
-
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
+
+import pandas as pd
 from tkinterdnd2 import DND_FILES
 
 from quality.quality_checker import check_quality
+
 
 def show_data(df: pd.DataFrame, filepath: str) -> None:
 
@@ -737,7 +738,7 @@ def show_quality_report(report: dict) -> None:
     ).pack(side="right")
 
 
-def select_file(filepath: str | str = None) -> None:
+def select_file(filepath: str = None) -> None:
 
     if not filepath:
         filepath = filedialog.askopenfilename(
