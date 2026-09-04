@@ -1,7 +1,7 @@
-import webbrowser
 import tkinter as tk
-
+import webbrowser
 from tkinter import ttk
+
 from PIL import Image, ImageTk
 
 # CONFIGURATION 
