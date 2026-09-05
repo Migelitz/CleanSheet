@@ -95,9 +95,15 @@ def check_quality(filepath: Path) -> dict:
     # Catches business logic violations (e.g., negative age, price) and unmasked numeric sentinels (-1, -99).
     negative_counts = defaultdict(int)
 
+    # ==============================================================================
+    # 4. DUPLICATES & UNIQUENESS
+    # ==============================================================================
+    # Track duplicate rows across chunks
+    is_seen = set()  # Global set of row hashes to track duplicates across chunks
+    duplicate_counts = 0
 
     # ==============================================================================
-    # 4. PAIRWISE BIVARIATE TRACKING (COVARIANCE)
+    # 5. PAIRWISE BIVARIATE TRACKING (COVARIANCE)
     # ==============================================================================
     # All pairwise dictionaries use tuple keys: (col_x, col_y) generated via itertools.combinations.
     # These strictly measure rows where BOTH columns have non-null numbers simultaneously.
@@ -117,7 +123,7 @@ def check_quality(filepath: Path) -> dict:
 
 
     # ==============================================================================
-    # 5. CATEGORICAL & CARDINALITY SETS
+    # 6. CATEGORICAL & CARDINALITY SETS
     # ==============================================================================
     # unique_values: Set of distinct non-null tokens -> {'col': {val1, val2, ...}}
     # Bounded by MAX_UNIQUE_VALUE to prevent memory explosions on high-cardinality IDs.
@@ -156,81 +162,90 @@ def check_quality(filepath: Path) -> dict:
         # Row count accumulation
         total_rows += len(chunk)
 
+        # Hash each row into a compact 64-bit unsigned integer.
+        # Makes it much faster to check for duplicates across chunks instead of comparing entire rows
+        # This lets us efficiently detect duplicates across chunks
+        # without storing/comparing entire rows.
+        row_hashes = pd.util.hash_pandas_object(chunk, index=False)
+        mask = ~row_hashes.isin(is_seen)
+        duplicate_counts += int((~mask).sum())
+        is_seen.update(row_hashes[mask])
+
         # Iterate through each column in the chunk to accumulate metrics
         for col in chunk.columns:
 
-                # Accumulate type drift
-                if chunk[col].dtype != baseline_dtypes[col]:
-                    type_drifts[col] = True  # Mark as drifted
+            # Accumulate type drift
+            if chunk[col].dtype != baseline_dtypes[col]:
+                type_drifts[col] = True  # Mark as drifted
 
-                # Null counts accumulation
-                null_counts[col] += chunk[col].isna().sum()
+            # Null counts accumulation
+            null_counts[col] += chunk[col].isna().sum()
 
-                # Sentinel value counts accumulation
-                sentinel_counts[col] += chunk[col].isin(sentinel_values).sum()
+            # Sentinel value counts accumulation
+            sentinel_counts[col] += chunk[col].isin(sentinel_values).sum()
 
-                # Unique values accumulation for low-cardinality columns
-                if unique_values[col] != "High Cardinality":
-                    if len(unique_values[col]) <= MAX_UNIQUE_VALUE:
-                        unique_values[col].update(chunk[col].dropna().unique())
-                    
-                    if len(unique_values[col]) > MAX_UNIQUE_VALUE:
-                        unique_values[col].clear()  # Clear to save memory if it exceeds the threshold
-                        unique_values[col] = "High Cardinality"
+            # Unique values accumulation for low-cardinality columns
+            if unique_values[col] != "High Cardinality":
+                if len(unique_values[col]) <= MAX_UNIQUE_VALUE:
+                    unique_values[col].update(chunk[col].dropna().unique())
+                
+                if len(unique_values[col]) > MAX_UNIQUE_VALUE:
+                    unique_values[col].clear()  # Clear to save memory if it exceeds the threshold
+                    unique_values[col] = "High Cardinality"        
 
         # Iterate through numeric columns for min, max, sum, zero, and negative counts
         for col in chunk.select_dtypes(include=['number']).columns:
 
 
-                chunk_min = chunk[col].min()
-                chunk_max = chunk[col].max()
+            chunk_min = chunk[col].min()
+            chunk_max = chunk[col].max()
 
-                # Ensure the chunk has non-null values to avoid NA comparisons
-                # Accumulate global min
-                if pd.notna(chunk_min):  
-                    if col not in global_min:
-                            global_min[col] = chunk_min
-                    else:
-                            global_min[col] = min(global_min[col], chunk_min)
+            # Ensure the chunk has non-null values to avoid NA comparisons
+            # Accumulate global min
+            if pd.notna(chunk_min):  
+                if col not in global_min:
+                        global_min[col] = chunk_min
+                else:
+                        global_min[col] = min(global_min[col], chunk_min)
 
-                # Accumulate global max
-                if pd.notna(chunk_max): 
-                    if col not in global_max:
-                            global_max[col] = chunk_max
-                    else:
-                            global_max[col] = max(global_max[col], chunk_max)
+            # Accumulate global max
+            if pd.notna(chunk_max): 
+                if col not in global_max:
+                        global_max[col] = chunk_max
+                else:
+                        global_max[col] = max(global_max[col], chunk_max)
 
-                # Running sum for mean calculation
-                running_sum[col] += chunk[col].sum()
-                numeric_counts[col] += chunk[col].count()  # Count of non-null values
+            # Running sum for mean calculation
+            running_sum[col] += chunk[col].sum()
+            numeric_counts[col] += chunk[col].count()  # Count of non-null values
 
-                # Zero counts
-                zero_counts[col] += (chunk[col] == 0).sum()
+            # Zero counts
+            zero_counts[col] += (chunk[col] == 0).sum()
 
-                # Negative counts (useful for features that should be strictly positive)
-                negative_counts[col] += (chunk[col] < 0).sum()
+            # Negative counts (useful for features that should be strictly positive)
+            negative_counts[col] += (chunk[col] < 0).sum()
 
-                # sum of squares for variance calculation
-                running_sum_sq[col] += (chunk[col] ** 2).sum()
+            # sum of squares for variance calculation
+            running_sum_sq[col] += (chunk[col] ** 2).sum()
 
         numeric_cols = chunk.select_dtypes(include=['number']).columns
 
         # combinations(list, 2) generates every unique pair of columns
         for col_x, col_y in combinations(numeric_cols, 2):
 
-                # Create a True/False mask for rows where BOTH columns have numbers
-                valid_mask = chunk[col_x].notna() & chunk[col_y].notna()
+            # Create a True/False mask for rows where BOTH columns have numbers
+            valid_mask = chunk[col_x].notna() & chunk[col_y].notna()
 
-                # Extract only the valid overlapping rows
-                valid_x = chunk.loc[valid_mask, col_x]
-                valid_y = chunk.loc[valid_mask, col_y]
+            # Extract only the valid overlapping rows
+            valid_x = chunk.loc[valid_mask, col_x]
+            valid_y = chunk.loc[valid_mask, col_y]
 
-                # Accumulate the pairwise stats
-                pair_key = (col_x, col_y)
-                pairwise_counts[pair_key] += valid_mask.sum()
-                pairwise_sum_x[pair_key] += valid_x.sum()
-                pairwise_sum_y[pair_key] += valid_y.sum()
-                running_sum_xy[pair_key] += (valid_x * valid_y).sum()
+            # Accumulate the pairwise stats
+            pair_key = (col_x, col_y)
+            pairwise_counts[pair_key] += valid_mask.sum()
+            pairwise_sum_x[pair_key] += valid_x.sum()
+            pairwise_sum_y[pair_key] += valid_y.sum()
+            running_sum_xy[pair_key] += (valid_x * valid_y).sum()
 
         del chunk  # Free memory after processing each chunk
 
@@ -313,7 +328,7 @@ def check_quality(filepath: Path) -> dict:
                 sample_covariance[(col_x, col_y)] = None
                 population_covariance[(col_x, col_y)] = None
 
-    pearson_correlation = {}
+    pearson_correlation = dict()
 
     for (col_x, col_y), cov in sample_covariance.items():
         std_x = sample_std.get(col_x)
@@ -350,6 +365,9 @@ def check_quality(filepath: Path) -> dict:
         "global_max": global_max,                           # Absolute maximum numeric value per column
         "zero_counts": zero_counts,                         # Count of zeros; indicates sparsity or default zero-fills
         "negative_counts": negative_counts,                 # Count of negative values; flags domain rule breaks (e.g., negative prices)
+
+        # ---- Duplicates & Uniqueness ---
+        "duplicate_counts": duplicate_counts,               # Total duplicate rows detected across all chunks
 
         # --- Central Tendency & Raw Accumulators ---
         "running_sum": running_sum,                         # Global sum of values (sum(x)) per numeric column
