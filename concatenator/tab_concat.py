@@ -1,3 +1,4 @@
+import threading
 import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
@@ -57,21 +58,11 @@ def concat_files(
 ) -> None:
     
     """Merges all files directly to disk and saves them to the specified directory."""
-    if not files:
-        messagebox.showwarning(
-            "No Files Selected", "Please select at least one file to merge."
-        )
-        return
 
     folder_path = Path(output_folder.strip())
 
     if not folder_path.exists() or not folder_path.is_dir():
-        messagebox.showerror(
-            "Invalid Folder",
-            "The selected destination folder does not exist.\n\n"
-            "Please choose a valid directory.",
-        )
-        return
+        raise ValueError("The selected destination folder does not exist.")
 
     clean_filename = output_filename.strip()
 
@@ -138,16 +129,16 @@ def concat_files(
             if temp_csv.exists():
                 temp_csv.unlink()
 
-        messagebox.showinfo(
-            "Success",
-            f"Successfully merged {len(files)} files into:\n{output_path.resolve()}",
+            messagebox.showinfo(
+                "Success",
+                f"Successfully merged {len(files)} files into:\n\n{output_folder}",
+            )
+    except Exception as e:
+        messagebox.showerror(
+            "Error",
+            f"An error occurred while merging files:\n\n{str(e)}"
         )
 
-    except Exception as error:
-        messagebox.showerror(
-            "Concatenation Error",
-            f"Could not merge spreadsheets.\n\n{error}",
-        )
 
 # ========================================================
 # MAIN APPLICATION WINDOW
@@ -435,7 +426,8 @@ def build_concatenator_tab(parent_frame) -> None:
         )
 
         if chosen_dir:
-            folder_path_entry.set(chosen_dir)
+            folder_path_entry.delete(0, tk.END)
+            folder_path_entry.insert(0, str(Path(chosen_dir).resolve()))
 
     ttk.Button(
         destination_frame,
@@ -532,16 +524,69 @@ def build_concatenator_tab(parent_frame) -> None:
     # ----- Concat Action Button -----
 
     def on_concat_click() -> None:
+
+        if not uploaded_files:
+            messagebox.showwarning(
+                "No Files Selected", "Please select at least one file to merge."
+            )
+            return
+
         concat_button.config(state=tk.DISABLED, text="Merging...")
 
-        concat_files(
-            files=uploaded_files,
-            output_folder=folder_path_entry.get(),
-            output_filename=output_entry.get(),
-            chunksize=int(chunk_size_entry.get())
-        )
+        # Progress window to indicate that the merging process is ongoing
+        progress_win = tk.Toplevel(parent_frame)
+        progress_win.title("Progress...")
 
-        concat_button.config(state=tk.NORMAL, text="Concatenate Files")
+        # Center the progress window on the screen
+        window_width, window_height = 300, 120
+        screen_width = progress_win.winfo_screenwidth()
+        screen_height = progress_win.winfo_screenheight()
+        x = (screen_width - window_width) // 2
+        y = (screen_height - window_height) // 2
+        progress_win.geometry(f"{window_width}x{window_height}+{x}+{y}")
+
+        # Make the progress window modal (block interaction with the main window)
+        progress_win.transient(parent_frame.winfo_toplevel())
+        progress_win.grab_set()
+
+        ttk.Label(
+            progress_win, 
+            text="Merging files...\nPlease wait.",
+            justify="center"
+        ).pack(pady=15)
+        
+        progress = ttk.Progressbar(progress_win, mode="indeterminate")
+        progress.pack(fill="x", padx=20)
+        progress.start()
+
+        def merge_in_thread():
+            try:
+                concat_files(
+                    files=uploaded_files,
+                    output_folder=folder_path_entry.get(),
+                    output_filename=output_entry.get(),
+                    chunksize=int(chunk_size_entry.get())
+                )
+
+                parent_frame.after(0, on_success)
+
+            except Exception as e:
+                parent_frame.after(0, lambda error=str(e): on_error(error))
+
+        def on_success():
+            progress.stop()
+            progress_win.grab_release() # Return control to the main window
+            progress_win.destroy()
+            concat_button.config(state=tk.NORMAL, text="Concatenate Files")
+
+        def on_error(error: str):
+            progress.stop()
+            progress_win.grab_release() # Return control to the main window
+            progress_win.destroy()
+            concat_button.config(state=tk.NORMAL, text="Concatenate Files")
+
+        # Start the merging process in a separate thread to keep the GUI responsive
+        threading.Thread(target=merge_in_thread, daemon=True).start()
 
     concat_button = ttk.Button(
         right_frame,

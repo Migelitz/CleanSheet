@@ -155,6 +155,32 @@ def show_data(df: pd.DataFrame, filepath: str) -> None:
             state=tk.DISABLED
         )
 
+        # Progress bar
+        progress_win = tk.Toplevel(parent_frame)
+        progress_win.title("Progress")
+
+        # Center the progress window on the screen
+        window_width, window_height = 300, 120
+        screen_width = progress_win.winfo_screenwidth()
+        screen_height = progress_win.winfo_screenheight()
+        x = (screen_width - window_width) // 2
+        y = (screen_height - window_height) // 2
+        progress_win.geometry(f"{window_width}x{window_height}+{x}+{y}")
+
+        # Make the progress window modal (block interaction with the main window)
+        progress_win.transient(parent_frame.winfo_toplevel())
+        progress_win.grab_set()
+
+        ttk.Label(
+            progress_win, 
+            text="Generating quality report...\nPlease wait.",
+            justify="center"
+        ).pack(pady=15)
+        
+        progress = ttk.Progressbar(progress_win, mode="indeterminate")
+        progress.pack(fill="x", padx=20)
+        progress.start()
+
         def run_background_task() -> None:
             try:
                 # Fetch the quality report
@@ -164,10 +190,14 @@ def show_data(df: pd.DataFrame, filepath: str) -> None:
                 # from a background thread. We use .after(0, ...) to push the 
                 # report back to the Main Thread so it can safely draw the new window.
                 parent_frame.after(0, lambda: on_success(report))
-            except Exception as error:
-                parent_frame.after(0, lambda error: on_error(error))
+            except Exception as e:
+                parent_frame.after(0, lambda error=str(e): on_error(error))
 
         def on_success(report: dict) -> None:
+            progress.stop()  # Stop the progress bar
+            progress_win.grab_release()  # Release the grab on the progress window
+            progress_win.destroy()  # Close the progress window
+
             # Display the quality report in a new window
             show_quality_report(report)
             quality_button.config(
@@ -175,7 +205,11 @@ def show_data(df: pd.DataFrame, filepath: str) -> None:
                 state=tk.NORMAL
             )
 
-        def on_error(error: Exception) -> None:
+        def on_error(error: str) -> None:
+            progress.stop()  # Stop the progress bar
+            progress_win.grab_release()  # Release the grab on the progress window
+            progress_win.destroy()  # Close the progress window
+
             messagebox.showerror(
                 "Processing Error", 
                 f"An error occurred while generating the report:\n\n{str(error)}"
@@ -696,12 +730,14 @@ def show_quality_report(report: dict) -> None:
 
     empty_count = len(report.get("empty_columns", []))
     drift_count = len(report.get("type_drifts", {}))
+    duplicate_count = report.get("duplicate_counts", 0)
 
     ttk.Label(
         additional_frame,
         text=(
             f"100% Empty columns: {empty_count}    |    "
-            f"Columns with Type Drifts: {drift_count}"
+            f"Columns with Type Drifts: {drift_count}    |    "
+            f"Duplicate count: {duplicate_count}"
         )
     ).pack(side="left")
 
@@ -824,10 +860,10 @@ def select_file(row_size: int, view_method: str, filepath: str | None = None) ->
                 )
                 return
 
-    except Exception as error:
+    except Exception as e:
         messagebox.showerror(
             "File Error",
-            f"Could not load the file.\n\n{error}"
+            f"Could not load the file.\n\n{str(e)}"
         )
         return
 

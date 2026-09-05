@@ -100,7 +100,6 @@ def check_quality(filepath: Path) -> dict:
     # ==============================================================================
     # Track duplicate rows across chunks
     is_seen = set()  # Global set of row hashes to track duplicates across chunks
-    duplicate_counts = 0
 
     # ==============================================================================
     # 5. PAIRWISE BIVARIATE TRACKING (COVARIANCE)
@@ -167,9 +166,7 @@ def check_quality(filepath: Path) -> dict:
         # This lets us efficiently detect duplicates across chunks
         # without storing/comparing entire rows.
         row_hashes = pd.util.hash_pandas_object(chunk, index=False)
-        mask = ~row_hashes.isin(is_seen)
-        duplicate_counts += int((~mask).sum())
-        is_seen.update(row_hashes[mask])
+        is_seen.update(row_hashes)
 
         # Iterate through each column in the chunk to accumulate metrics
         for col in chunk.columns:
@@ -250,6 +247,8 @@ def check_quality(filepath: Path) -> dict:
         del chunk  # Free memory after processing each chunk
 
     # ----- Finalize Metrics -----
+
+    duplicate_counts = total_rows - len(is_seen)  # Total duplicates across all chunks
 
     unique_values = {
         col: vals 
