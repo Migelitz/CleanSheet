@@ -1,0 +1,64 @@
+name: "Build Appliction (Nuitka)"
+
+on:
+    workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            flags: >-
+              --windows-disable-console
+              --windows-icon-from-ico=assets/cleansheet_icon.ico
+            artifact_name: CleanSheet-Windows
+            output_name: CleanSheet.exe
+
+          - os: ubuntu-latest
+            flags: >-
+              --linux-disable-console
+              --linux-icon=assets/cleansheet_icon.png
+            artifact_name: CleanSheet-Linux
+            output_name: CleanSheet
+      
+    runs-on: ${{ matrix.os }}
+    
+    steps:
+        - name: Checkout
+          uses: actions/checkout@v7
+
+        - name: Set up Python
+          uses: actions/setup-python@v7
+          with:
+            python-version: '3.12'
+
+        - name: Install Linux build dependencies
+          if: runner.os == 'Linux'
+          run: |
+            sudo apt-get update
+            sudo apt-get install -y patchelf
+
+        - name: Install uv
+          uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d
+
+        - name: Install Dependencies
+          uses: uv sync --locked
+
+        - name: Compile Application
+          shell: bash
+          run: |
+            uv run python -m nuitka \
+              --onefile \
+              --enable-plugin=tk-inter \
+              --include-data-dir=assets=assets \
+              --assume-yes-for-downloads \
+              --output-filename="${{ matrix.output_name }}" \
+              ${{ matrix.platform_flags }} \
+              main.py
+
+        - name: Upload Artifacts
+          uses: actions/upload-artifact@v4
+          with:
+            name: ${{ matrix.output_name }}
+            path: ${{ matrix.output_name }}
