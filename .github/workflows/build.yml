@@ -11,13 +11,13 @@ jobs:
           - os: windows-latest
             flags: >-
               --windows-console-mode=disable
-              --windows-icon-from-ico=assets/cleansheet_logo.ico
+              --windows-icon-from-ico=assets/icons/cleansheet_logo.ico
             artifact_name: CleanSheet-Windows
             output_name: CleanSheet.exe
 
           - os: ubuntu-latest
             flags: >-
-              --linux-icon=assets/cleansheet_logo.png
+              --linux-icon=assets/icons/cleansheet_logo.png
             artifact_name: CleanSheet-Linux
             output_name: CleanSheet
       

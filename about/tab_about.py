@@ -204,7 +204,7 @@ def build_about_tab(parent_frame: ttk.Frame) -> None:
 
     # ----- Logo Icon -----
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-    ASSETS_DIR = os.path.abspath(os.path.join(BASE_DIR, "../", "assets"))
+    ASSETS_DIR = os.path.abspath(os.path.join(BASE_DIR, "../", "assets", "icons"))
 
     try:
         img = Image.open(os.path.join(ASSETS_DIR, "cleansheet_logo.png"))

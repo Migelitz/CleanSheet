@@ -24,7 +24,7 @@ def center_window(window: TkinterDnD.Tk, width: int, height: int) -> None:
 def main() -> None:
 
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-    ASSETS_DIR = os.path.join(BASE_DIR, "assets")
+    ASSETS_DIR = os.path.join(BASE_DIR, "assets", "icons")
 
     root = TkinterDnD.Tk()
     root.title("CleanSheet")
