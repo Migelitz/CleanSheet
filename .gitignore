@@ -8,3 +8,8 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Spreadsheet testing files
+*.csv
+*.xlsx  
+*.xls
