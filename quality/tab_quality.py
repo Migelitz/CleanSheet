@@ -1,3 +1,4 @@
+import os
 import csv
 import random
 import threading
@@ -1057,7 +1058,10 @@ def build_quality_checker_tab(parent_frame: ttk.Frame) -> None:
         dash=(8, 5),
     )
 
-    image_parse = Image.open("assets/upload_icon.png")
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    ASSETS_DIR = os.path.abspath(os.path.join(BASE_DIR, "../", "assets"))
+
+    image_parse = Image.open(os.path.join(ASSETS_DIR, "upload_icon.png"))
     image_parse = image_parse.resize((80, 80))
     upload_icon = ImageTk.PhotoImage(image_parse)
 
