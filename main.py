@@ -30,8 +30,8 @@ def main() -> None:
     root.title("CleanSheet")
 
     # Cross-platform window icon handling
-    ico_path = os.path.join(ASSETS_DIR, "cleansheet_icon.ico")
-    png_path = os.path.join(ASSETS_DIR, "cleansheet_icon.png")
+    ico_path = os.path.join(ASSETS_DIR, "cleansheet_logo.ico")
+    png_path = os.path.join(ASSETS_DIR, "cleansheet_logo.png")
 
     if sys.platform.startswith("win") and os.path.exists(ico_path):
         root.iconbitmap(default=ico_path)
