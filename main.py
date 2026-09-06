@@ -1,3 +1,5 @@
+import os
+import sys
 import tkinter as tk
 from tkinter import ttk
 
@@ -20,13 +22,23 @@ def center_window(window: TkinterDnD.Tk, width: int, height: int) -> None:
 
 
 def main() -> None:
+
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    ASSETS_DIR = os.path.join(BASE_DIR, "assets")
+
     root = TkinterDnD.Tk()
     root.title("CleanSheet")
 
-    # Window icon TODO: Test if icon appears even in window
-    icon = tk.PhotoImage(file="assets/cleansheet_logo.png")
-    root.iconphoto(True, icon)
-    
+    # Cross-platform window icon handling
+    ico_path = os.path.join(ASSETS_DIR, "cleansheet_icon.ico")
+    png_path = os.path.join(ASSETS_DIR, "cleansheet_icon.png")
+
+    if sys.platform.startswith("win") and os.path.exists(ico_path):
+        root.iconbitmap(default=ico_path)
+    elif os.path.exists(png_path):
+        app_icon = tk.PhotoImage(file=png_path)
+        root.iconphoto(True, app_icon)
+
     # Center window with specific width and height
     center_window(root, width=800, height=480)
     root.minsize(650, 380)
