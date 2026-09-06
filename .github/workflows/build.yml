@@ -43,7 +43,7 @@ jobs:
           uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d
 
         - name: Install Dependencies
-          uses: uv sync --locked
+          run: uv sync --locked
 
         - name: Compile Application
           shell: bash
