@@ -24,5 +24,6 @@ package = false
 
 [dependency-groups]
 dev = [
+    "nuitka>=4.2",
     "pyright>=1.1.411",
 ]
