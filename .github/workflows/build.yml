@@ -10,7 +10,7 @@ jobs:
         include:
           - os: windows-latest
             flags: >-
-              --windows-disable-console=disable
+              --windows-console-mode=disable
               --windows-icon-from-ico=assets/cleansheet_logo.ico
             artifact_name: CleanSheet-Windows
             output_name: CleanSheet.exe
