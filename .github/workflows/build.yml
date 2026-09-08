@@ -11,13 +11,13 @@ jobs:
           - os: windows-latest
             flags: >-
               --windows-console-mode=disable
-              --windows-icon-from-ico=assets/icons/cleansheet_logo.ico
+              --windows-icon-from-ico=src/assets/icons/cleansheet_logo.ico
             artifact_name: CleanSheet-Windows
             output_name: CleanSheet.exe
 
           - os: ubuntu-latest
             flags: >-
-              --linux-icon=assets/icons/cleansheet_logo.png
+              --linux-icon=src/assets/icons/cleansheet_logo.png
             artifact_name: CleanSheet-Linux
             output_name: CleanSheet
       
@@ -50,11 +50,11 @@ jobs:
             uv run python -m nuitka \
               --onefile \
               --enable-plugin=tk-inter \
-              --include-data-dir=assets=assets \
+              --include-data-dir=src/assets=assets \
               --assume-yes-for-downloads \
               --output-filename="${{ matrix.output_name }}" \
               ${{ matrix.flags }} \
-              main.py
+              src/main.py
 
         - name: Upload Artifacts
           uses: actions/upload-artifact@v4
