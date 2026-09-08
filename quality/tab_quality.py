@@ -1,5 +1,5 @@
-import os
 import csv
+import os
 import random
 import threading
 import tkinter as tk
@@ -213,7 +213,7 @@ def show_data(df: pd.DataFrame, filepath: str) -> None:
 
             messagebox.showerror(
                 "Processing Error", 
-                f"An error occurred while generating the report:\n\n{str(error)}"
+                f"An error occurred while generating the report:\n\n{error}"
             )
             quality_button.config(
                 text="Check Data Quality", 
@@ -864,7 +864,7 @@ def select_file(row_size: int, view_method: str, filepath: str | None = None) ->
     except Exception as e:
         messagebox.showerror(
             "File Error",
-            f"Could not load the file.\n\n{str(e)}"
+            f"Could not load the file.\n\n{e!s}" # !s is modern type conversion
         )
         return
 

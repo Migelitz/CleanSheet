@@ -14,7 +14,7 @@ def check_quality(filepath: Path) -> dict:
     # CONFIGURATION
     # ========================================================
 
-    chunk_size = 30_000
+    chunk_size = 50_000
     MAX_UNIQUE_VALUE = 1_000 # Threshold for low-cardinality columns 
     sentinel_values = (
         # Whitespace and empty
