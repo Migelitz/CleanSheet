@@ -16,8 +16,15 @@ def stream_to_csv(
     chunksize: int = 50_000
 ) -> None:
     
-    """Streams CSV and Excel files into a single CSV file in chunks to minimize RAM."""
+    """
+    Combines CSV and XLSX files into a single CSV file.
+
+    CSV files are processed in chunks, while XLSX files are loaded
+    into memory before being written.
+    """
+
     is_first_write = True
+    expected_columms = None
 
     for filepath in files:
         extension = Path(filepath).suffix.lower()
@@ -25,6 +32,10 @@ def stream_to_csv(
         if extension == ".csv":
             # Stream CSV in chunks to avoid loading full dataset into memory
             for chunk in pd.read_csv(filepath, chunksize=chunksize):
+                if expected_columms is None:
+                    expected_columms = list(chunk.columns)
+                elif list(chunk.columns) != expected_columms:
+                    raise ValueError(f"Column mismatch in file: {filepath}")
 
                 chunk.to_csv(
                     output_path,
@@ -34,9 +45,14 @@ def stream_to_csv(
                 )
                 is_first_write = False
 
-        elif extension in [".xlsx", ".xls"]:
+        elif extension == ".xlsx":
             # Load individual excel file, write immediately, then free memory
             df = pd.read_excel(filepath, engine="calamine")
+
+            if expected_columms is None:
+                expected_columms = list(df.columns)
+            elif list(chunk.columns) != expected_columms:
+                raise ValueError(f"Column mismatch in file: {filepath}")
 
             df.to_csv(
                 output_path,
@@ -72,71 +88,62 @@ def concat_files(
     output_path = folder_path / clean_filename
     extension = output_path.suffix.lower()
 
-    try:
-        # Default destination format to CSV if extension is unspecified or non-excel
-        # Protect the program from crashing from the user who enters output name with other file extension like .txt
-        if extension not in [".xlsx", ".xls"]:
-            if extension != ".csv":
-                output_path = output_path.with_suffix(".csv")
+    if extension == ".csv":
+        stream_to_csv(files=files, output_path=output_path, chunksize=chunksize)
+        
+    elif extension == ".xlsx":
+        # Excel export: Stream to temporary CSV first, then convert one-by-one
+        # to prevent keeping all DataFrames in memory simultaneously
+        temp_csv = folder_path / f"~temp_{clean_filename}.csv"
+        stream_to_csv(files=files, output_path=temp_csv, chunksize=chunksize)
 
-            stream_to_csv(files=files, output_path=output_path, chunksize=chunksize)
-            
-        else:
-            # Excel export: Stream to temporary CSV first, then convert one-by-one
-            # to prevent keeping all DataFrames in memory simultaneously
-            temp_csv = folder_path / f"~temp_{clean_filename}.csv"
-            stream_to_csv(files=files, output_path=temp_csv, chunksize=chunksize)
+        with pd.ExcelWriter(
+            output_path,
+            engine="xlsxwriter",
+            ) as writer:
 
-            with pd.ExcelWriter(
-                output_path,
-                engine="xlsxwriter",
-                engine_kwargs={'options': {'constant_memory': True}}
-                ) as writer:
+            EXCEl_MAX_ROWS = 1_048_576
+            current_row = 0
 
-                current_row = 0
+            for chunk in pd.read_csv(temp_csv, chunksize=chunksize):
 
-                for chunk in pd.read_csv(temp_csv, chunksize=chunksize):
+                if current_row + len(chunk) > 1_048_576:
+                    messagebox.showwarning(
+                        "Excel Row Limit",
+                        "Merged data exceeds Excel's row limit of 1,048,576 rows. "
+                        "Only the first 1,048,576 rows will be saved to the Excel file. "
+                        "Please consider exporting to CSV for larger datasets.",
+                    )
 
-                    if current_row + len(chunk) > 1_048_576:
-                        messagebox.showwarning(
-                            "Excel Row Limit",
-                            "Merged data exceeds Excel's row limit of 1,048,576 rows. "
-                            "Only the first 1,048,576 rows will be saved to the Excel file. "
-                            "Please consider exporting to CSV for larger datasets.",
+                    remaining_rows = EXCEl_MAX_ROWS - current_row - 1 # To add space for header
+
+                    if remaining_rows > 0:
+                        chunk.iloc[:remaining_rows].to_excel(   # [:remaining_rows] is panda slicing to limit the number of rows written to Excel
+                            writer,
+                            index=False,
+                            startrow=current_row,
+                            header=current_row == 0 # If start of file, write header; otherwise, skip header
                         )
 
-                        remaining_rows = 1_048_576 - current_row
-                        if remaining_rows > 0:
-                            chunk.iloc[:remaining_rows].to_excel(   # [:remaining_rows] is panda slicing to limit the number of rows written to Excel
-                                writer,
-                                index=False,
-                                startrow=current_row,
-                                header=current_row == 0 # If start of file, write header; otherwise, skip header
-                            )
+                    # If the row limit is reached, break out of the loop to stop writing more data
+                    break
 
-                        # If the row limit is reached, break out of the loop to stop writing more data
-                        break
+                chunk.to_excel(
+                    writer,
+                    index=False,
+                    startrow=current_row,
+                    header=current_row == 0
+                )
+                current_row += len(chunk)
 
-                    chunk.to_excel(
-                        writer,
-                        index=False,
-                        startrow=current_row,
-                        header=current_row == 0
-                    )
-                    current_row += len(chunk)
+        # Delete temp_csv file after using
+        if temp_csv.exists():
+            temp_csv.unlink()
 
-            # Delete temp_csv file after using
-            if temp_csv.exists():
-                temp_csv.unlink()
-
-            messagebox.showinfo(
-                "Success",
-                f"Successfully merged {len(files)} files into:\n\n{output_folder}",
-            )
-    except Exception as e:
-        messagebox.showerror(
-            "Error",
-            f"An error occurred while merging files:\n\n{str(e)}"
+    else:
+        raise ValueError(
+            f"Unsupported output format: {extension}. "
+            "Supported formats are .csv and .xlsx."
         )
 
 
@@ -242,7 +249,7 @@ def build_concatenator_tab(parent_frame) -> None:
     # ========================================================
 
     def add_filepaths(paths: list[str]) -> None:
-        valid_extensions = [".csv", ".xlsx", ".xls"]
+        valid_extensions = [".csv", ".xlsx"]
 
         for filepath in paths:
             clean_path = str(Path(filepath).resolve())
@@ -258,7 +265,7 @@ def build_concatenator_tab(parent_frame) -> None:
                 messagebox.showwarning(
                     "Unsupported File Type",
                     f"The file '{Path(clean_path).name}' has an unsupported format.\n\n"
-                    "Supported formats are: CSV (.csv), Excel (.xlsx, .xls)."
+                    "Supported formats are: CSV (.csv), Excel (.xlsx)."
                 )
             elif clean_path in uploaded_files:
                 messagebox.showinfo(
@@ -270,9 +277,9 @@ def build_concatenator_tab(parent_frame) -> None:
         selected = filedialog.askopenfilenames(
             title="Select Spreadsheets",
             filetypes=[
-                ("All Spreadsheets", "*.csv *.xlsx *.xls"),
+                ("All Spreadsheets", "*.csv *.xlsx"),
                 ("CSV Files", "*.csv"),
-                ("Excel Files", "*.xlsx *.xls")
+                ("Excel Files", "*.xlsx")
             ],
         )
 
@@ -574,12 +581,22 @@ def build_concatenator_tab(parent_frame) -> None:
                 parent_frame.after(0, lambda error=str(e): on_error(error))
 
         def on_success():
+            messagebox.showinfo(
+                "Success",
+                f"Successfully merged {len(uploaded_files)} files into:\n\n{folder_path_entry.get()}",
+            )
+
             progress.stop()
             progress_win.grab_release() # Return control to the main window
             progress_win.destroy()
             concat_button.config(state=tk.NORMAL, text="Concatenate Files")
 
         def on_error(error: str):
+            messagebox.showerror(
+                "Error",
+                f"An error occurred while merging files:\n\n{error}"
+            )
+
             progress.stop()
             progress_win.grab_release() # Return control to the main window
             progress_win.destroy()
