@@ -193,6 +193,9 @@ def check_quality(filepath: Path) -> dict:
         # Iterate through numeric columns for min, max, sum, zero, and negative counts
         for col in chunk.select_dtypes(include=['number']).columns:
 
+            # Skip empty chunks
+            if chunk[col].count() == 0:
+                 continue
 
             chunk_min = chunk[col].min()
             chunk_max = chunk[col].max()
@@ -212,9 +215,14 @@ def check_quality(filepath: Path) -> dict:
                 else:
                         global_max[col] = max(global_max[col], chunk_max)
 
+            # Count of non-null values
+            numeric_counts[col] += chunk[col].count()
+
             # Running sum for mean calculation
             running_sum[col] += chunk[col].sum()
-            numeric_counts[col] += chunk[col].count()  # Count of non-null values
+
+            # sum of squares for variance calculation
+            running_sum_sq[col] += (chunk[col] ** 2).sum()
 
             # Zero counts
             zero_counts[col] += (chunk[col] == 0).sum()
@@ -222,10 +230,12 @@ def check_quality(filepath: Path) -> dict:
             # Negative counts (useful for features that should be strictly positive)
             negative_counts[col] += (chunk[col] < 0).sum()
 
-            # sum of squares for variance calculation
-            running_sum_sq[col] += (chunk[col] ** 2).sum()
-
-        numeric_cols = chunk.select_dtypes(include=['number']).columns
+        # Only keep columns that have values
+        numeric_cols = [
+             col 
+             for col in chunk.select_dtypes(include=['number']).columns
+             if chunk[col].count() > 0
+             ]
 
         # combinations(list, 2) generates every unique pair of columns
         for col_x, col_y in combinations(numeric_cols, 2):
@@ -247,6 +257,22 @@ def check_quality(filepath: Path) -> dict:
         del chunk  # Free memory after processing each chunk
 
     # ----- Finalize Metrics -----
+
+    # Delete columns that drifts from int to other type during chunking
+    for col, has_drift in type_drifts.items():
+        if has_drift:
+            global_min.pop(col, None)
+            global_max.pop(col, None)
+            numeric_counts.pop(col, None)
+            running_sum.pop(col, None)
+            running_sum_sq.pop(col, None)
+            zero_counts.pop(col, None)
+            negative_counts.pop(col, None)
+            pairwise_counts.pop(col, None)
+            pairwise_sum_x.pop(col, None)
+            pairwise_sum_x.pop(col, None)
+            pairwise_sum_y.pop(col, None)
+            running_sum_xy.pop(col, None)
 
     duplicate_counts = total_rows - len(is_seen)  # Total duplicates across all chunks
 

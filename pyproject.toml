@@ -17,6 +17,7 @@ dependencies = [
     "xlrd>=2.0.2",
     "numpy>=2.5.2",
     "nameparser>=2.2.0",
+    "xlsxwriter>=3.2.9",
 ]
 
 [dependency-groups]

@@ -1,8 +1,9 @@
-# Known Issues & Troubleshooting
+# ⚙️ Known Issues & Troubleshooting
 
 ## `tkinterdnd2` Event Serial Crash in Python 3.12+
 
 ### Problem Description
+
 When running CleanSheet on Python 3.12 or newer, dragging and dropping a file into the application window causes an immediate crash with the following traceback:
 
 ```python
@@ -20,15 +21,31 @@ _tkinter.TclError: expected integer but got "%#"
 
 ### Root Cause
 
-This issue originates in the underlying Tcl/Tk drag-and-drop extension used by `tkinterdnd2`.
+The issue occurs at the interaction between tkinterdnd2 and Tkinter's event-substitution handling.
 
-During drag-and-drop events, the extension fails to emit a valid integer event serial number and instead passes the literal string `"%#"`. Prior to Python 3.12, Tkinter handled substitution loosely. Starting in Python 3.12, `tkinter.__init__.py` strictly enforces integer conversion on `e.serial`, triggering an unhandled `_tkinter.TclError`.
+During drag-and-drop events, the underlying Tcl/Tk drag-and-drop extension can provide the literal string `"%#"` where Tkinter expects an integer event serial number.
 
-*Reference:* [cpython Issue #94861](https://github.com/python/cpython/issues/94861)
+Python 3.12's Tkinter implementation attempts to convert this value to an integer when constructing the event object:
+
+```text
+e.serial = getint(nsign)
+```
+
+Because `"%#"` is not a valid integer, Tkinter raises:
+
+```text
+_tkinter.TclError: expected integer but got "%#"
+```
+
+*Reference:* [CPython Issue #94861](https://github.com/python/cpython/issues/94861)
 
 ### Implemented Solution (Monkey Patch)
 
-To prevent runtime crashes without modifying system Python libraries or waiting for upstream package updates, `tab_quality.py` applies an in-memory monkey patch to `tk.Misc._substitute` prior to mounting UI components:
+CleanSheet applies an in-memory monkey patch to `tk.Misc._substitute` before mounting the UI components.
+
+The patch detects the invalid `"%#"` value and replaces it with `0` before passing the arguments to Tkinter's original `_substitute` implementation.
+
+
 
 ```python
 # ==============================================================================
@@ -50,4 +67,26 @@ tk.Misc._substitute = _patched_substitute
 # ==============================================================================
 ```
 
-This intercepts incoming callback arguments, replaces the invalid `"%#"` string with `0`, and forwards the sanitized arguments to Tkinter.
+### Why this works
+
+The drag-and-drop event can otherwise fail before the application's own callback receives the event.
+
+Replacing `"%#"` with `0` gives Tkinter a valid integer value, allowing it to continue constructing the event object and dispatching the drag-and-drop callback normally.
+
+The event serial number is not used by CleanSheet's file-processing logic, so using `0` is sufficient for this compatibility workaround.
+
+### Scope
+
+This is an application-level monkey patch. It:
+
+- Does not modify the installed Python standard library.
+- Does not modify tkinterdnd2 itself.
+- Applies only while the CleanSheet process is running.
+- Allows the existing drag-and-drop implementation to continue working.
+- Can be removed when the underlying compatibility issue is resolved upstream.
+
+### Maintenance Notice
+
+This workaround should be reviewed when upgrading Python, Tkinter, or **tkinterdnd2**.
+
+If a future version of **tkinterdnd2** or Tkinter resolves the underlying incompatibility, the monkey patch should be tested for necessity and removed if it is no longer required.

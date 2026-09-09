@@ -1,73 +1,324 @@
-# Data Quality Checker Engine
+# Data Quality Checker
 
-The `quality_checker` module provides streaming data profiling and schema validation for spreadsheet datasets. It is built to audit CSV and Excel files on standard consumer machines by maintaining bounded memory consumption where possible.
+The **CleanSheet Data Quality Checker** is a spreadsheet-profiling engine designed to inspect datasets for common structural, missing-data, numeric, duplication, and statistical quality issues.
 
----
+It is implemented as part of the CleanSheet desktop GUI and is intended primarily as a practical, customizable data-cleaning tool for personal use. The engine is also designed to remain usable on standard consumer hardware when processing larger CSV datasets.
 
-## 🔬 Benchmarking Methodology
+The core analysis logic is implemented in:
 
-All performance benchmarks were captured using an isolated instrumentation harness (`quality_benchmark.py`) to record deterministic hardware metrics without GUI overhead.
+```
+src/cleansheet/quality/quality_checker.py
+```
 
-### Instrumentation Stack
-* **Execution Timing:** Measured wall-clock duration via high-resolution `time.perf_counter()`.
-* **OS Resident Memory (RSS):** Monitored using a dedicated background daemon thread (`SystemResourceMonitor`) running `psutil.Process().memory_info().rss` sampled every **50 milliseconds** (`interval_sec=0.05`).
-  * **Baseline RAM:** Process memory immediately prior to audit execution.
-  * **Peak Process RAM:** Highest Resident Set Size recorded across all 50 ms polling ticks.
-  * **Net OS RAM Used:** The true operating-system-level memory delta ($\Delta = \text{Peak RSS} - \text{Baseline RSS}$).
-* **Python Object Heap:** Profiled using Python's native `tracemalloc` module to distinguish internal heap allocations from native C/Rust library allocations (Pandas/Calamine).
-* **CPU Utilization:** Sampled continuously via non-blocking `psutil.cpu_percent(interval=None)` during execution, extracting both average and peak multi-core utilization.
-* **Throughput:** Evaluated across both dimensions:
-  $$\text{Throughput}_{\text{rows}} = \frac{\text{Processed Rows}}{\Delta t} \quad (\text{rows/sec})$$
-  $$\text{Throughput}_{\text{MB}} = \frac{\text{File Size (MB)}}{\Delta t} \quad (\text{MB/sec})$$
+The GUI integration is handled by:
+
+```
+src/cleansheet/quality/tab_quality.py
+```
 
 ---
 
-## ⚡ Performance & Benchmark Results
+## What Does It Check?
 
-### Hardware Profile
-* **CPU:** Intel Core i5-1035G1 @ 1.00 GHz (4 Cores / 8 Threads, Ice Lake)
-* **RAM:** 8.00 GiB total (~7.52 GiB available to user space, 2.00 GiB Swap)
-* **Storage:** TeamGroup 512 GB SATA III SSD (6.0 Gb/s)
-* **OS / Kernel:** Linux Mint 22.3 Zena (x86_64, Kernel 7.0.0-31-generic)
-* **Environment:** Python 3.12, Pandas 2.x, Calamine engine
+The Quality Checker produces a data-quality report containing several categories of information.
+
+### Dataset Structure
+
+- Total number of rows.
+- Total number of columns.
+- Column names.
+- Completely empty columns.
+
+### Schema & Type Integrity
+
+- Baseline data types detected from the first CSV chunk or the loaded Excel dataset.
+- Type-drift detection when a column is interpreted with different data types across CSV chunks.
+
+### Missing Data
+
+- Standard null values such as `NaN`, `None`, and other values recognized by Pandas.
+- Null counts and percentages.
+- Non-null counts and percentages.
+- Detection of columns containing only missing values.
+
+### Sentinel Values
+
+The engine also searches for common placeholder values that may represent missing or invalid data but are not necessarily parsed as standard nulls.
+
+Examples include:
+
+```
+?
+N/A
+missing
+unknown
+DK
+REF
+#DIV/0!
+1970-01-01
+-
+```
+
+The sentinel list is intentionally heuristic and can be expanded as additional domain-specific cases are encountered.
+
+### Numeric Health
+
+For numeric columns, the engine calculates:
+
+- Minimum value.
+- Maximum value.
+- Number of zero values.
+- Number of negative values.
+- Number of valid numeric observations.
+- Global sum.
+- Mean.
+- Population variance.
+- Sample variance.
+- Population standard deviation.
+- Sample standard deviation.
+
+### Duplicate Detection
+
+Rows are hashed using Pandas' `hash_pandas_object()` and tracked globally to identify duplicate rows across the entire dataset, including duplicates that occur in different processing chunks.
+
+### Pairwise Statistics
+
+For numeric column pairs, the engine calculates:
+
+- Sample covariance.
+- Population covariance.
+- Pearson correlation.
+
+Only rows where both variables contain valid numeric observations contribute to pairwise calculations.
+
+### Categorical Cardinality
+
+The engine tracks distinct non-null values for columns while applying a configurable cardinality guardrail.
+
+The current threshold is:
+
+```
+MAX_UNIQUE_VALUE = 1_000
+```
+
+Columns exceeding this threshold are classified as:
+
+```
+High Cardinality
+```
+
+This prevents large collections of unique strings from being retained unnecessarily.
 
 ---
 
-### CSV Streaming Audits
-CSV processing streams row blocks via `pd.read_csv(filepath, chunksize=30000, low_memory=False)`.
+## Input Formats
 
-| Dataset | Rows | Columns | File Size | Covariance Pairs | Avg Execution Time | Avg Throughput | Peak Net RAM Used | Peak Process RAM |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Telco Customer Churn** | 7,043 | 21 | 0.93 MB | 3 | 0.423 sec | ~18,366 rows/sec | 8.26 MB | 74.34 MB |
-| **Customer Spending (1M)** | 1,000,000 | 11 | 88.71 MB | 6 | 38.125 sec | ~26,755 rows/sec | 205.29 MB | 271.63 MB |
-| **5M Sales Records** | 5,000,000 | 14 | 595.09 MB | 21 | 237.245 sec | ~21,278 rows/sec | 411.99 MB | 478.16 MB |
-| **Used Vehicles** | 426,880 | 26 | 1.38 GB | 21 | 82.480 sec | ~5,347 rows/sec | 1,075.93 MB* | 1,142.04 MB |
-| **custom_1988_2020.csv** | ~100,000,000 | 8 | 4.60 GB | Aborted | **FAILED (OOM)** | 0 rows/sec | > 7.50 GB (Exhausted) | Kernel SIGKILL (137) |
+The Quality Checker currently accepts:
 
-*\* Note on String Density: `vehicles.csv` contains freeform descriptions, full URLs, and long VIN values across 26 columns. Python allocates distinct heap pointers for text objects inside every 30k chunk, resulting in higher resident memory usage than processing 5 million scalar numeric rows.*
+```
+.csv
+.xls
+.xlsx
+```
 
-*Note on 100M Row Dataset Failure: `custom_1988_2020.csv` contains roughly 100 million rows. Even with 30k chunk streaming, storing 64-bit integer hashes in `is_seen = set()` scales linearly with unique row counts, exceeding the available 7.52 GiB of RAM plus 2 GiB swap and triggering the Linux Out of Memory (OOM) killer.*
+### CSV
+
+CSV files are processed incrementally using Pandas chunking.
+
+Conceptually:
+
+```
+CSV file
+│
+▼
+Read chunk
+│
+▼
+Analyze chunk
+│
+▼
+Accumulate global statistics
+│
+▼
+Read next chunk
+│
+▼
+...
+```
+
+The production/default chunk size is **50,000 rows**.
+
+Smaller chunk sizes may be used by tests or experiments. For example, the accuracy tests use a chunk size of 5 rows so that a deliberately mixed-type column can transition between chunks inside a very small fixture.
+
+### Excel
+
+Excel files currently use the `calamine` engine for ingestion.
+
+The current implementation first loads the worksheet into a DataFrame and then slices that DataFrame into chunks for compatibility with the same analysis loop used by CSV processing.
+
+Therefore, Excel processing is **not currently true out-of-core streaming**.
+
+Conceptually:
+
+```
+Excel workbook
+   │
+   ▼
+Load workbook into memory
+   │
+   ▼
+DataFrame
+   │
+   ▼
+Slice into analysis chunks
+   │
+   ▼
+Run quality checks
+```
+
+This is an intentional v1 limitation. A future version may investigate a more genuinely streaming Excel ingestion strategy.
 
 ---
 
-### Excel (`.xlsx` & `.xls`) Ingestion
-Because standard libraries do not support true out-of-core row generators for zipped XML workbooks, Excel files are loaded into memory first via the `calamine` engine and sliced into chunks artificially.
+## Processing Philosophy
 
-| Dataset | Rows | Columns | File Size | Covariance Pairs | Avg Execution Time | Avg Throughput | Peak Net RAM Used | Peak Process RAM |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **file_example_5000.xls** | 5,000 | 8 | 0.64 MB | 3 | 0.507 sec | ~10,053 rows/sec | 15.58 MB | 81.61 MB |
-| **sample-1mb.xlsx** | 26,312 | 4 | 1.05 MB | 1 | 2.286 sec | ~13,167 rows/sec | 48.29 MB | 114.38 MB |
-| **sample_10240kb.xlsx** | 61,439 | 9 | 11.44 MB | 3 | 9.123 sec | ~7,557 rows/sec | 235.76 MB | 302.05 MB |
-| **12mb.xlsx** | 42,000 | 8 | 11.85 MB | 0 | 6.372 sec | ~7,318 rows/sec | 215.91 MB | 281.99 MB |
-| **100mb.xlsx** | 27,000 | 8 | 100.81 MB | 0 | 6.699 sec | ~4,173 rows/sec | 407.70 MB | 476.40 MB |
-| **retail-sales-data.xlsx** | 500,000 | 12 | 230.76 MB | 6 | 61.392 sec | ~8,220 rows/sec | 1,827.78 MB** | 1,893.92 MB |
+The engine uses a **single-pass accumulation model** wherever practical.
 
-*\*\* Note on Memory Amplification: `.xlsx` files are compressed ZIP archives containing raw XML sheets. When parsed into memory, expanding cell trees creates a 5x–8x memory footprint expansion over the compressed file size on disk.*
+Instead of retaining the complete dataset for statistical calculations, it maintains running state such as:
+
+```
+sum(x)
+sum(x²)
+sum(xy)
+count
+minimum
+maximum
+```
+
+This allows statistics to be calculated after processing the final chunk without requiring a second complete pass over the source file.
+
+The approach keeps the implementation relatively simple and works naturally with the CSV chunk-processing model.
+
+There are, however, known scalability boundaries. The engine does **not** guarantee globally constant memory usage because some forms of global state grow with the dataset or schema.
+
+Examples include:
+
+- The global duplicate hash set grows with the number of unique rows.
+- Pairwise statistical state grows with the number of numeric column combinations.
+- Excel ingestion currently requires the workbook to be loaded into memory first.
+- Cardinality tracking intentionally retains up to the configured number of unique values per column.
+
+These trade-offs are documented in more detail in `ARCHITECTURE_NOTES.md`.
 
 ---
 
-## ⚙️ Core Architecture Trade-offs
+## V1 Scope & Known Limitations
 
-1. **True Streaming (CSV) vs. In-Memory Load (Excel):** CSV files process in bounded $O(1)$ memory relative to row count. Excel files require $O(N)$ memory proportional to the total workbook size before chunk generation begins.
-2. **Global Duplicate Tracking:** The deduplication logic utilizes 64-bit row hashes stored in an in-memory set (`is_seen = set()`). While lookups run in $O(1)$ time, set allocation scales with the count of distinct rows ($O(U)$), creating a known memory constraint on high-cardinality datasets containing tens of millions of rows.
-3. **Combinatorial Covariance:** Pairwise tracking evaluates $\binom{K}{2}$ pairs for $K$ numeric columns. Wider numeric tables require more CPU cycles and slice copies during chunk iteration.
+The Quality Checker is a **v1 profiling engine**, not a complete data-quality or statistical-analysis platform.
+
+Several limitations are known and intentionally accepted for the current release.
+
+### Duplicate Tracking
+
+Duplicate detection uses a global Python `set` containing 64-bit row hashes.
+
+This avoids retaining complete row data for duplicate comparison, but the set still grows with the number of unique rows.
+
+Extremely large datasets with very high numbers of unique rows can therefore exhaust available memory.
+
+This behavior was observed during testing with a dataset containing approximately 100 million rows.
+
+See `ARCHITECTURE_NOTES.md` for the design rationale and `TEST_RESULT.md` for testing evidence.
+
+### Excel Memory Usage
+
+CSV processing benefits from incremental reading, while the current Excel implementation loads the workbook into memory before analysis.
+
+Large Excel workbooks can therefore consume substantially more memory than similarly sized CSV datasets.
+
+### Statistical Numerical Stability
+
+Variance and covariance currently use algebraic shortcut formulas based on accumulated sums and squared/cross-product sums.
+
+These formulas are efficient and convenient for a single-pass implementation but can suffer from floating-point cancellation on datasets containing extremely large values with relatively small variance.
+
+A numerically more stable online approach, such as Welford-style accumulation, is a candidate for a future version.
+
+### Pairwise Covariance Scaling
+
+Pairwise statistics are calculated eagerly for every combination of numeric columns:
+
+$$
+\binom{K}{2}
+$$
+
+where $K$ is the number of numeric columns.
+
+Consequently, the amount of pairwise work increases quadratically as the number of numeric columns grows.
+
+A future implementation may make expensive pairwise calculations optional or on-demand.
+
+### Sentinel Detection
+
+Sentinel detection is heuristic.
+
+There is no universal list of strings that represents missing data across every spreadsheet, organization, or domain. The current list covers a collection of common placeholders, spreadsheet errors, refusal codes, and date placeholders but cannot guarantee detection of every domain-specific sentinel.
+
+### Cardinality Tracking
+
+The current 1,000-value threshold is a deliberate memory guardrail rather than an empirically established universal optimum.
+
+The threshold can be revisited as more datasets and usage patterns are evaluated.
+
+---
+
+## Documentation
+
+The Quality Checker documentation is separated by purpose.
+
+### Architecture
+
+`ARCHITECTURE_NOTES.md`
+
+Explains the engineering decisions behind the implementation, including:
+
+- CSV chunking.
+- Excel ingestion.
+- Running statistical accumulators.
+- Duplicate hashing.
+- Pairwise covariance.
+- Cardinality limits.
+- Sentinel detection.
+- Memory and scalability trade-offs.
+- Known boundaries and future improvements.
+
+### Test Results
+
+`TEST_RESULT.md`
+
+Documents the correctness tests performed against CSV, XLSX, and XLS fixtures, including the intentionally mixed-type test cases and accepted format-specific differences.
+
+### Troubleshooting
+
+`TROUBLESHOOTING.md`
+
+Documents implementation problems encountered during development and the solutions or workarounds used to resolve them.
+
+---
+
+## Summary
+
+The CleanSheet Quality Checker is designed around a simple goal:
+
+> **Provide useful spreadsheet-quality profiling without requiring the entire dataset to remain in memory during CSV analysis.**
+
+The current v1 implementation deliberately favors:
+
+- Standard Pandas functionality.
+- Straightforward single-pass processing.
+- Compatibility with the CleanSheet desktop GUI.
+- Practical profiling over exhaustive statistical analysis.
+- Simple implementation over premature optimization.
+- Explicitly documented limitations over hidden assumptions.
+
+The engine is intended to evolve as additional datasets, benchmarks, and real-world usage reveal where the current design should be improved.
