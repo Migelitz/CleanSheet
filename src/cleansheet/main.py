@@ -3,12 +3,11 @@ import sys
 import tkinter as tk
 from tkinter import ttk
 
-from tkinterdnd2 import TkinterDnD
-
 from about.tab_about import build_about_tab
 from cleaner.tab_cleaner import build_cleaner_tab
 from concatenator.tab_concat import build_concatenator_tab
 from quality.tab_quality import build_quality_checker_tab
+from tkinterdnd2 import TkinterDnD
 
 
 def center_window(window: TkinterDnD.Tk, width: int, height: int) -> None:
