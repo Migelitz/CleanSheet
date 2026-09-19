@@ -6,7 +6,6 @@ from pathlib import Path
 
 import psutil
 
-# Import your quality engine
 from src.cleansheet.quality.quality_checker import check_quality
 
 
@@ -126,6 +125,7 @@ def run_benchmark(filepath_str: str) -> None:
 if __name__ == "__main__":
     import sys
 
-    # Replace with a path to one of your real test datasets:
+    # Replace with a path to one of your real test datasets (guide on how to execute):
+    # python -m tests.quality_benchmark (file location of your dataset e.g. assets/test_files/quality_test.csv)
     target_file = sys.argv[1] if len(sys.argv) > 1 else sys.exit(1)
     run_benchmark(target_file)
