@@ -7,7 +7,7 @@ from pathlib import Path
 import psutil
 
 # Import your quality engine
-from cleansheet.quality.quality_checker import check_quality
+from src.cleansheet.quality.quality_checker import check_quality
 
 
 class SystemResourceMonitor:
@@ -80,7 +80,7 @@ def run_benchmark(filepath_str: str) -> None:
     monitor.stop()
 
     # 3. Collect Python Internal Memory & Stop Tracker
-    current_py_mem, peak_py_mem = tracemalloc.get_traced_memory()
+    _, peak_py_mem = tracemalloc.get_traced_memory()
     tracemalloc.stop()
 
     # 4. Compute Metrics
