@@ -51,7 +51,7 @@ def stream_to_csv(
 
             if expected_columms is None:
                 expected_columms = list(df.columns)
-            elif list(chunk.columns) != expected_columms:
+            elif list(df.columns) != expected_columms:
                 raise ValueError(f"Column mismatch in file: {filepath}")
 
             df.to_csv(
@@ -102,12 +102,12 @@ def concat_files(
             engine="xlsxwriter",
             ) as writer:
 
-            EXCEl_MAX_ROWS = 1_048_576
+            EXCEl_MAX_ROWS = 1_048_575
             current_row = 0
 
             for chunk in pd.read_csv(temp_csv, chunksize=chunksize):
 
-                if current_row + len(chunk) > 1_048_576:
+                if current_row + len(chunk) > EXCEl_MAX_ROWS:
                     messagebox.showwarning(
                         "Excel Row Limit",
                         "Merged data exceeds Excel's row limit of 1,048,576 rows. "
@@ -131,7 +131,7 @@ def concat_files(
                 chunk.to_excel(
                     writer,
                     index=False,
-                    startrow=current_row,
+                    startrow=current_row + (1 if current_row > 0 else 0), # Take account on the header count since its also counted as row
                     header=current_row == 0
                 )
                 current_row += len(chunk)
