@@ -1,0 +1,11 @@
+num_a,num_b,category,sentinels,all_empty,drift_test
+10,20.0,Alpha,?,,100
+10,20.0,Alpha,?,,100
+-5,0.0,Beta,missing,,200
+0,-10.0,Beta,DK,,300
+15,30.0,Gamma,#DIV/0!,,400
+25,50.0,Alpha,1970-01-01,,500
+-15,,Beta,valid_text,,600
+30,60.0,Gamma,valid_text,,700
+0,0.0,Alpha,-,,800
+5,10.0,Beta,valid_text,,text_drift
