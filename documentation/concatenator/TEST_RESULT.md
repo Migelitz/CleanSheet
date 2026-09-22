@@ -25,6 +25,9 @@ Benchmarking evaluates:
 * Peak process RSS
 * CPU behavior
 * Effect of chunk size
+* Effect of input/output format and workload characteristics
+
+The benchmarks are intended as an engineering baseline for V1 rather than as universal performance guarantees.
 
 ---
 
@@ -160,6 +163,14 @@ Observed temperatures under the controlled configuration were approximately:
 
 with observed averages around the mid-80 °C range.
 
+A higher performance cap of approximately 85% produced observed temperatures around:
+
+```text
+98–100 °C
+```
+
+during sustained work, so the higher cap was not used for the long-running benchmark suite.
+
 These results therefore represent:
 
 > **The current device under a thermal-conscious CPU performance cap.**
@@ -167,6 +178,8 @@ These results therefore represent:
 They should not be interpreted as maximum possible hardware performance.
 
 A faster or better-cooled machine can produce different absolute execution times.
+
+The CPU cap is also part of the benchmark methodology: execution time is affected not only by the software workload but also by the available CPU performance of the test environment.
 
 ---
 
@@ -183,6 +196,45 @@ The benchmark records:
 * Average process CPU usage
 
 Peak RSS is particularly important because it represents the process's overall resident memory rather than only Python allocations tracked by `tracemalloc`.
+
+For repeated runs, **Peak Process RSS is the primary memory metric**.
+
+The benchmark's **OS baseline RSS** and **Net OS RAM Used** values are still useful as diagnostic measurements, but they must be interpreted carefully because multiple repetitions are executed sequentially inside the same Python process. Memory retained or reused by the Python runtime and underlying libraries can cause the baseline to rise between runs.
+
+Therefore, a higher baseline in a later repetition does not by itself mean that the Concatenator accumulated the previous workload's complete memory footprint.
+
+---
+
+# 🔁 Repeated-Run Methodology
+
+The benchmark can execute several repetitions using a loop inside one Python process.
+
+Conceptually:
+
+```text
+Python process
+    ↓
+Run 1
+    ↓
+Run 2
+    ↓
+Run 3
+```
+
+This is useful for observing repeatability, but it is not equivalent to launching each benchmark in a completely fresh interpreter.
+
+The process remains alive between repetitions, so Python allocators and native libraries may retain or reuse memory. The post-processing `check_quality()` call is also outside the timed benchmark section, but retained allocations can still affect the baseline of a later repetition.
+
+Because of this, the following are treated differently:
+
+* **Peak RSS** — primary indicator of the maximum memory reached during the workload.
+* **Python Heap Peak** — primary indicator of Python-level allocations tracked during that run.
+* **Baseline RSS** — environmental/process-state information before that repetition.
+* **Net RSS** — diagnostic information that is not directly comparable between repetitions when the process baseline changes.
+
+This does not invalidate the V1 benchmarks. It simply defines what the measurements can and cannot establish.
+
+A fresh-process benchmark suite could produce cleaner baseline comparisons, but the current V1 benchmark is accepted as an engineering characterization of the implementation under the documented test procedure.
 
 ---
 
@@ -292,11 +344,13 @@ to:
 464 MB
 ```
 
-The small runtime difference is not sufficient to claim that 1,000,000 rows is inherently faster.
+The runtime difference is small relative to the size of the workload and does not establish that 1,000,000 rows is inherently faster.
 
 The stronger conclusion is:
 
 > **The chunk size had a much larger effect on memory than on throughput in this workload.**
+
+This demonstrates the central purpose of chunking: memory usage can be controlled without requiring the entire CSV dataset to exist in memory at once.
 
 ---
 
@@ -327,6 +381,8 @@ Columns:
 ```
 
 This dataset was intentionally selected because it is large and string-heavy.
+
+The larger amount of string-oriented data also demonstrates that raw file size and row count alone do not completely describe a workload's memory behavior. Cell contents and their resulting in-memory representations also matter.
 
 ---
 
@@ -495,7 +551,9 @@ One recorded peak CPU value reached approximately:
 852.5%
 ```
 
-This value is not treated as a meaningful representation of normal CPU usage because `psutil.Process.cpu_percent()` is a stateful metric and process CPU percentages can exceed 100% on multicore systems.
+This value is not treated as a meaningful representation of normal sustained CPU usage because `psutil.Process.cpu_percent()` is a stateful metric and process CPU percentages can exceed 100% on multicore systems.
+
+The relatively short runtime of this workload also made it useful for demonstrating that execution speed is partly dependent on CPU performance. A different CPU performance limit or a different machine can produce a different absolute execution time even when the software and input dataset remain unchanged.
 
 ---
 
@@ -525,6 +583,59 @@ Consequently, changing the chunk size does not eliminate the memory required to 
 
 This explains why peak RSS remained relatively similar across the tested XLSX chunk sizes.
 
+This is an important architectural distinction:
+
+> **CSV input is genuinely chunked during ingestion; XLSX input is not.**
+
+---
+
+# 📦 Output Format Interpretation
+
+The benchmarks also demonstrate that the requested output format changes the workload.
+
+For the tested workloads:
+
+* **CSV output** is comparatively straightforward and can be written incrementally to disk.
+* **XLSX output** requires an additional conversion stage through the temporary CSV and spreadsheet-writing process.
+
+Therefore, output format affects execution time, I/O, and final file size.
+
+In the tested workflows, CSV output generally favored shorter processing time at the cost of larger output files, while XLSX output required more processing work and could produce a more compact spreadsheet representation.
+
+These are **observed V1 workload characteristics**, not universal guarantees for every dataset or filesystem.
+
+---
+
+# 🧩 Input Size and Cell-Content Effects
+
+Input file size, row count, column count, and cell contents all contribute to the amount of work required.
+
+A larger input generally means more data must be parsed and written, increasing potential execution time.
+
+For CSV, chunking controls how much of that data is held in memory at one time.
+
+Cell contents also matter. Large or string-heavy values can require more memory to represent and can increase processing work even when row counts are similar.
+
+Therefore, benchmark results should not be interpreted from file size alone.
+
+A useful model is:
+
+```text
+Execution time and memory usage
+
+        ↓
+
+Input size
++ row/column count
++ cell contents
++ input format
++ output format
++ chunk size
++ CPU/system performance
+```
+
+The exact effect of each factor depends on the workload and implementation.
+
 ---
 
 # 📊 Cross-Dataset Interpretation
@@ -539,13 +650,14 @@ rows/second
 
 is affected by row width and data characteristics.
 
-A dataset with 26 string-heavy columns is not equivalent to a dataset with 14 columns of different value types.
+A dataset with string-heavy columns is not equivalent to a dataset with 14 columns of different value types.
 
 Therefore:
 
 * **Rows/sec** is useful when comparing the same workload under different configurations.
 * **MB/sec** provides additional context when comparing workloads with different row widths.
 * Memory measurements should be interpreted alongside the dataset structure.
+* Execution time should be interpreted alongside the CPU configuration and hardware.
 
 ---
 
@@ -557,7 +669,9 @@ The current benchmarks support several practical conclusions.
 
 The large CSV benchmark showed that reducing chunk size can dramatically lower peak memory.
 
-This is especially important when processing datasets larger than the available comfortable RAM budget.
+For example, the 5M-row chunk configuration reached approximately 1.89 GB peak RSS, while the 1M-row configuration reached approximately 464 MB under the same workload.
+
+This is the clearest performance/resource trade-off established by the benchmark suite.
 
 ---
 
@@ -566,6 +680,8 @@ This is especially important when processing datasets larger than the available 
 Increasing chunk size produced much larger memory requirements without a proportional improvement in execution time.
 
 Therefore, there appears to be a diminishing-return region in the tested workloads.
+
+Chunk size should be treated primarily as a memory/performance tuning parameter rather than a setting that simply makes the program faster when increased.
 
 ---
 
@@ -581,7 +697,9 @@ is reasonable for the tested hardware and workloads.
 
 This should not be interpreted as a universal optimal value.
 
-A future version could provide better automatic or workload-specific chunk-size selection.
+The benchmark instead demonstrates why a moderate chunk size is a practical default: substantially larger chunks can consume considerably more RAM without providing a similarly large throughput benefit.
+
+Users with different memory capacities or workloads may choose a different value.
 
 ---
 
@@ -617,6 +735,20 @@ True streaming XLSX ingestion remains a major future optimization.
 
 ---
 
+## 5. Execution speed is hardware-dependent
+
+The benchmarks also demonstrate that execution time is not solely a property of the Concatenator implementation.
+
+CPU performance, thermal conditions, and the general system environment affect how quickly the same workload completes.
+
+The 60% CPU performance cap was therefore part of the benchmark configuration rather than merely an incidental laptop setting.
+
+The measured execution times should be treated as:
+
+> **Reference measurements for the documented hardware and CPU configuration.**
+
+---
+
 # ⚠️ Benchmark Limitations
 
 These benchmarks have several limitations.
@@ -628,6 +760,14 @@ The long CSV tests were performed with a 60% CPU performance cap to avoid sustai
 ### Hardware limitation
 
 The results describe the developer's current laptop, not a universal hardware baseline.
+
+### Same-process repetitions
+
+Repeated runs are performed sequentially in the same Python process.
+
+This can cause later OS baselines to differ because memory may be retained or reused by the Python runtime and underlying libraries.
+
+For this reason, Peak RSS is more useful for comparing workload memory than Net RSS across repetitions.
 
 ### Limited benchmark count
 
@@ -649,6 +789,12 @@ The current benchmark suite does not extensively test:
 * Temporary-file cleanup after failure
 
 These remain future test areas.
+
+### No claim of universal optimality
+
+The benchmarks describe behavior observed under specific workloads, software versions, and hardware conditions.
+
+They should not be interpreted as universal performance guarantees.
 
 ---
 
@@ -676,6 +822,8 @@ Performance optimization
 
 rather than maximizing theoretical throughput at the expense of memory.
 
+The benchmark suite is considered sufficient for the V1 release baseline. Future changes to the architecture can use these results as the comparison point rather than requiring the entire benchmark process to be repeated without a code or architectural change.
+
 ---
 
 # 🔮 Future Testing
@@ -693,6 +841,7 @@ Future optimization passes should investigate:
 * Exact Excel row-limit behavior
 * More comprehensive schema validation
 * Additional spreadsheet formats
+* Fresh-process benchmark repetitions when cleaner baseline isolation is required
 
 The current benchmarks provide a baseline for those future experiments.
 
@@ -705,5 +854,7 @@ The current benchmarks provide a baseline for those future experiments.
 The Concatenator successfully handles the six primary CSV/XLSX format combinations tested.
 
 The current architecture has known limitations, particularly around XLSX ingestion and schema/dtype handling, but these limitations are explicitly documented rather than hidden.
+
+The benchmark results establish a practical V1 baseline for memory behavior, throughput, output-format trade-offs, chunk-size behavior, and hardware-dependent execution time.
 
 The next optimization cycle can therefore build on a measured baseline rather than redesigning the system blindly.

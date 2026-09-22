@@ -1,6 +1,6 @@
 # 🏗️ Architecture Notes
 
-This document records the architectural decisions behind the **Spreadsheet Concatenator**, including the reasoning, trade-offs, experimentally observed limitations, and future improvements.
+This document records the architectural decisions behind the **Spreadsheet Concatenator**, including the reasoning, trade-offs, experimentally observed limitations, benchmark findings, and future improvements.
 
 The purpose of this document is not to present the architecture as universally optimal.
 
@@ -174,7 +174,7 @@ Loading an entire multi-gigabyte CSV into memory would create an unnecessary dep
 
 ```text
 Dataset size
-        ↓
+    ↓
 RAM requirement
 ```
 
@@ -192,13 +192,25 @@ Large file
       disk
 ```
 
-Only the current chunk needs to be processed at a time.
+Only the current chunk needs to be processed by the CSV path at one time.
 
 ### Trade-off
 
-Chunking introduces additional read/write operations and therefore has some processing overhead.
+Chunking introduces additional iteration and I/O overhead.
 
-However, benchmarks showed that increasing the chunk size did not provide a consistent throughput improvement large enough to justify the additional memory consumption in the tested workloads.
+The benchmark results showed that chunk size is a meaningful memory/performance tuning parameter, but increasing it did not consistently produce proportional throughput improvements.
+
+For example, the large `5m Sales Records.csv × 2` workload reached approximately **1.89 GB peak process RSS** with a 5,000,000-row chunk, while the same workload at a 1,000,000-row chunk reached approximately **464 MB peak process RSS**. Throughput remained in a similar range in those two tests.
+
+This demonstrates the main architectural trade-off:
+
+> **Larger chunks can substantially increase memory requirements without guaranteeing a comparable increase in throughput.**
+
+### Architectural Interpretation
+
+Chunking should therefore be treated as a mechanism for **controlling memory pressure**, not simply as a way to make processing faster.
+
+The appropriate chunk size depends on the workload and available hardware.
 
 ---
 
@@ -242,7 +254,7 @@ Therefore:
 
 > **CSV ingestion is chunked; XLSX ingestion is not.**
 
-This distinction is important when describing the architecture.
+This distinction is important when interpreting the benchmark results. Larger XLSX inputs can place more memory pressure on the process before the disk-backed CSV stage can reduce the dependence on the size of the combined dataset.
 
 ### Why This Was Still Better Than `pd.concat()`
 
@@ -342,7 +354,9 @@ The dataset is written to disk and then read again.
 
 This increases I/O and therefore can increase total execution time.
 
-However, the architecture prioritizes memory behavior over eliminating this additional I/O.
+The benchmark results are consistent with this trade-off: in the tested workloads, CSV output completed faster, while XLSX output required additional processing and therefore took longer.
+
+However, the XLSX output path can produce a smaller final file than its CSV counterpart for the same tabular data.
 
 ### Why Not Just `pd.concat()` Then `to_excel()`?
 
@@ -470,13 +484,7 @@ Lower memory use and faster spreadsheet reading were part of the motivation.
 
 This is currently a **research-informed architectural choice**, not a project-proven benchmark result.
 
-The project has not yet performed a controlled:
-
-```text
-Calamine vs OpenPyXL
-```
-
-benchmark using the same datasets and environment.
+The project has not performed a controlled Calamine vs OpenPyXL benchmark using the same datasets and environment.
 
 ### Future Improvement
 
@@ -583,27 +591,34 @@ It was never intended to represent a universal optimum.
 
 ### Benchmark Findings
 
-Later testing showed that increasing the chunk size could increase memory usage dramatically without producing a proportional improvement in execution time.
+The newer benchmark suite reinforced that chunk size is primarily a **memory/performance tuning parameter** rather than a guaranteed speed control.
 
-For example, the `vehicles.csv` workload produced approximately:
+For the `vehicles.csv` workload, the tested values showed approximately:
 
-| Chunk Size | Peak RSS | Avg Runtime |
-| ---------: | -------: | ----------: |
-|     50,000 | ~1.24 GB |    ~178.5 s |
-|    100,000 | ~2.08 GB |    ~181.3 s |
-|    200,000 | ~3.78 GB |    ~181.3 s |
+| Chunk Size | Peak RSS | Runtime |
+| ----------: | -------: | ------: |
+| 50,000 | ~1.24 GB | ~178.5 s |
+| 100,000 | ~2.08 GB | ~181.3 s |
+| 200,000 | ~3.78 GB | ~181.3 s |
 
-The exact runtime should not be interpreted as proof that 50,000 is inherently faster.
+The exact runtime values should not be treated as universal performance guarantees. The important observation is that **memory consumption increased substantially while throughput remained broadly similar** for this workload.
 
-The important observation is:
+The larger `5m Sales Records.csv × 2` workload provided another useful comparison:
 
-> **Memory increased substantially while throughput remained broadly similar.**
+| Chunk Size | Peak Process RSS | Throughput |
+| ----------: | ----------------: | ---------: |
+| 1,000,000 | ~464 MB | ~13.2k rows/s |
+| 5,000,000 | ~1.89 GB | ~13.2k rows/s |
+
+This demonstrates that a much larger chunk can consume several times more memory without producing a comparable throughput improvement.
 
 ### Architectural Interpretation
 
-This suggests that, for the tested workloads, increasing chunk size beyond a certain point has diminishing returns.
+The benchmark results suggest that increasing chunk size beyond a certain point can produce **diminishing performance returns** while continuing to raise peak memory usage.
 
-The chunk size is therefore better understood as a **memory/performance tuning parameter**, not simply a speed setting.
+The chunk size is therefore better understood as a **memory/performance tuning parameter**. Users with limited RAM can reduce chunk size to lower peak memory pressure, while larger chunk sizes may be useful when additional memory is available and a workload benefits from larger batches.
+
+The benchmark does **not** establish that a particular chunk size is universally optimal.
 
 ---
 
@@ -611,41 +626,51 @@ The chunk size is therefore better understood as a **memory/performance tuning p
 
 ### Choice
 
-Long-running CSV benchmarks were performed with the CPU performance capability limited to approximately **60%**.
+The benchmark suite was performed under a CPU performance limit of approximately **60%** on the developer's test laptop.
 
 ### Rationale
 
-Higher performance caps caused sustained temperatures in the approximate range of:
+Higher CPU performance limits caused sustained temperatures approaching the laptop's thermal ceiling during long-running workloads.
+
+Observed operating ranges included approximately:
 
 ```text
-86–100 °C
+60% CPU limit → ~78–92 °C
+85% CPU limit → ~98–100 °C
 ```
 
-and made long benchmark sessions thermally uncomfortable.
+The 60% setting was therefore selected as a practical thermal-conscious configuration for repeated benchmark runs.
 
-A 60% cap produced a more controlled operating range, roughly around:
+This was not intended to measure maximum possible hardware performance.
+
+### Benchmark Interpretation
+
+CPU performance is one variable affecting execution time.
+
+The measured execution time is therefore influenced by both the Concatenator and the environment in which it runs:
 
 ```text
-78–92 °C
+Execution time
+    ↓
+Application implementation
++ input workload
++ input/output format
++ chunk size
++ CPU performance
++ system/runtime conditions
 ```
 
-with observed averages around the mid-80 °C range.
+The 60% cap provides a documented and repeatable test condition, but absolute execution times should not be treated as universal values for other machines.
 
-The cap therefore allowed repeated testing without intentionally keeping the CPU near 100 °C for extended periods.
+### Why Include the CPU Variable?
 
-### Interpretation
+The `100mb.xlsx` workload was also useful for observing the relationship between CPU performance and execution time because it completed relatively quickly compared with the largest CSV workloads.
 
-These benchmarks should be interpreted as:
-
-> **Controlled measurements on the developer's current hardware under a thermal-conscious CPU performance cap.**
-
-They are not maximum-performance measurements.
-
-A different device with stronger cooling or a faster processor could produce different absolute execution times.
+The benchmark therefore treats CPU performance as part of the experimental environment rather than attributing all execution-time differences to the Concatenator itself.
 
 ### Important Distinction
 
-The CPU performance cap is separate from the benchmark's measured process CPU usage.
+The CPU performance cap is separate from the benchmark's measured process CPU utilization.
 
 A process reporting approximately 100% CPU does not mean that the laptop's CPU was operating at unrestricted maximum performance.
 
@@ -677,7 +702,7 @@ Columns:
 14
 ```
 
-This workload tests large CSV processing.
+This workload tests large CSV processing and makes the effect of chunk size on memory especially visible.
 
 ### String-Heavy CSV
 
@@ -727,11 +752,34 @@ Columns:
 
 This workload was selected to exercise XLSX ingestion and XLSX output behavior.
 
+### Why Different Workloads Matter
+
+The benchmark results support treating input size, data characteristics, and output format as independent workload variables rather than assuming that file size alone determines performance.
+
+Larger or more substantial cell values can increase the amount of data that must be represented, parsed, copied, and written, which can increase both processing time and memory pressure.
+
+The exact effect depends on the format and processing path. In particular, CSV can reduce the relationship between total dataset size and peak memory through chunking, while XLSX input is currently loaded into memory as a DataFrame.
+
+### Output Format as a Workload Variable
+
+The requested output format also affects resource usage and execution time.
+
+In the tested workloads:
+
+| Output | Observed behavior |
+| --- | --- |
+| CSV | Faster processing and larger resulting files |
+| XLSX | Longer processing and smaller resulting files |
+
+These are **observed V1 benchmark results**, not universal guarantees for every dataset or environment.
+
+The XLSX path performs additional work because it first creates an intermediate CSV and then converts that representation into an XLSX workbook.
+
 ### Purpose
 
 The goal was not to create a statistically representative benchmark suite.
 
-The goal was to **push the application toward difficult workloads** and discover where the architecture begins to struggle.
+The goal was to **push the application toward difficult workloads**, expose architectural trade-offs, and identify where resource usage or execution time becomes significant.
 
 ---
 
@@ -953,6 +1001,18 @@ The optimization was removed because of incorrect/incomplete output observed wit
 
 The GUI does not provide a precise percentage.
 
+### Benchmark results are hardware- and workload-dependent
+
+The recorded execution times and memory measurements describe the tested implementation under the documented hardware and CPU-performance conditions.
+
+They should not be interpreted as universal performance guarantees for every machine, operating system, dataset, or CPU configuration.
+
+### Repeated benchmark runs share one Python process
+
+The benchmark repetitions are executed sequentially in the same Python process. Consequently, the OS RSS baseline can increase between runs because the Python runtime and underlying libraries may retain or reuse memory.
+
+For this reason, **peak process RSS** is the primary memory metric, while baseline and net RSS are treated as diagnostic measurements rather than direct standalone measures of workload memory use.
+
 ---
 
 # 23. Future Architectural Direction
@@ -1027,6 +1087,13 @@ Instead, it prioritizes:
 4. Data preservation
 5. Clear failure when schemas are incompatible
 6. Incremental improvement through measurement
+7. Predictable resource behavior under the documented benchmark conditions
+
+The benchmark results added another architectural lesson: **performance is a multi-variable trade-off rather than a single speed number**.
+
+Input size, data characteristics, chunk size, output format, CPU performance, and the processing architecture all contribute to observed execution time and memory usage.
+
+The current implementation therefore does not claim a universal "fastest" or "lowest-memory" configuration. Instead, V1 documents the behavior of the selected architecture under representative workloads and uses those measurements to justify design decisions such as chunked CSV processing and the disk-backed XLSX pipeline.
 
 The most important lesson from the architecture is that a theoretically simple approach is not necessarily practical at scale.
 

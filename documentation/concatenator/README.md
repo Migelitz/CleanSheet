@@ -42,11 +42,11 @@ It does **not** currently attempt to automatically repair, normalize, or transfo
 
 # 📥 Supported Input Formats
 
-| Format  | Supported | Processing                                   |
-| ------- | --------: | -------------------------------------------- |
-| `.csv`  |         ✅ | Chunked with `pandas.read_csv()`             |
-| `.xlsx` |         ✅ | Loaded into a DataFrame with Pandas/Calamine |
-| `.xls`  |         ❌ | Not supported in V1                          |
+| Format | Supported | Processing |
+| :--- | ---: | :--- |
+| `.csv` | ✅ | Chunked with `pandas.read_csv()` |
+| `.xlsx` | ✅ | Loaded into a DataFrame with Pandas/Calamine |
+| `.xls` | ❌ | Not supported in V1 |
 
 The GUI currently allows users to select only CSV and XLSX files.
 
@@ -54,11 +54,11 @@ The GUI currently allows users to select only CSV and XLSX files.
 
 # 📤 Supported Output Formats
 
-| Format  | Supported | Processing                     |
-| ------- | --------: | ------------------------------ |
-| `.csv`  |         ✅ | Written incrementally to disk  |
-| `.xlsx` |         ✅ | Built from an intermediate CSV |
-| `.xls`  |         ❌ | Not supported                  |
+| Format | Supported | Processing |
+| :--- | ---: | :--- |
+| `.csv` | ✅ | Written incrementally to disk |
+| `.xlsx` | ✅ | Built from an intermediate CSV |
+| `.xls` | ❌ | Not supported |
 
 CSV is the preferred output format when working with datasets that may exceed Excel's worksheet row limit.
 
@@ -379,33 +379,59 @@ The default chunk size is:
 50,000 rows
 ```
 
-The value was originally chosen as a practical starting point based partly on the Quality Checker implementation and the expectation that it would provide a reasonable balance between memory usage and execution time.
+The value was originally chosen as a practical starting point based partly on the Quality Checker implementation.
 
 It is **not a universal optimal value**.
 
-Users can configure the chunk size.
+Users can configure the chunk size based on the size of their files and the memory available on their system.
 
 General behavior:
 
 ```text
 Smaller chunks
     ↓
-Lower memory usage
+Lower peak memory usage
     ↓
 Potentially more processing overhead
 
 Larger chunks
     ↓
-Higher memory usage
+Higher peak memory usage
     ↓
-Potentially less overhead
+Potentially better throughput
 ```
 
-However, benchmarks performed during development showed that increasing the chunk size did not consistently produce meaningful throughput improvements for the tested workloads.
+Benchmarking showed that chunk size is primarily a **memory/performance trade-off** rather than a guaranteed speed control. In the tested large CSV workload, reducing the chunk size substantially lowered peak process RAM while keeping throughput in a similar range.
 
-This suggests that beyond a certain point, increasing chunk size can provide diminishing performance returns while continuing to increase memory consumption.
+This means that increasing the chunk size can eventually provide diminishing performance returns while continuing to increase memory consumption.
+
+The selected chunk size should therefore be treated as a workload and system-dependent setting rather than a universally optimal value.
 
 Detailed measurements are documented in `TEST_RESULT.md`.
+
+---
+
+# 📈 Benchmark Findings
+
+Benchmarking was performed to establish the practical behavior of the V1 Concatenator under the tested workloads and hardware conditions.
+
+The results showed that:
+
+* **Input workload affects execution time and memory usage.** Larger datasets generally require more data to be processed and can therefore increase processing time and resource usage. The effect depends on the input format and processing strategy.
+
+* **CSV input benefits from chunking.** CSV files are processed incrementally, allowing peak process memory to be controlled through the selected chunk size. XLSX input does not currently have the same true chunked ingestion path and therefore remains more memory-intensive during input loading.
+
+* **Output format affects performance and file size.** In the tested workloads, CSV output completed faster but produced larger files, while XLSX output required more processing time but produced smaller files. These are observed V1 benchmark results, not universal guarantees for every dataset.
+
+* **Cell content can affect workload cost.** Larger or more data-heavy cell contents can require more processing and memory. The exact effect depends on the data and the libraries involved, so this should be treated as a general workload characteristic rather than a fixed scaling rule.
+
+* **CPU performance affects execution time.** Benchmark results are dependent on the hardware and CPU performance available to the process. The tests were performed with a **60% CPU performance limit** to keep the laptop within a more sustainable thermal range. Higher CPU limits produced substantially higher temperatures during testing.
+
+* **Peak process RAM is the primary memory metric.** Repeated benchmark runs were executed sequentially within the same Python process. Because the Python runtime and underlying libraries may retain or reuse memory between runs, the OS baseline can increase from one run to the next. For this reason, peak process RSS is more useful for comparing workload memory consumption than net RSS across repeated runs.
+
+These results describe the behavior of the current V1 implementation on the documented test environment. They should not be interpreted as universal performance guarantees across all hardware, datasets, or operating systems.
+
+Detailed benchmark measurements, methodology, and accepted limitations are documented in `TEST_RESULT.md`.
 
 ---
 
@@ -490,14 +516,14 @@ This duplicate prevention is primarily a **user-interface convenience**:
 
 The current functional test suite verifies the six primary format combinations:
 
-| Input       | Output | Status |
-| ----------- | ------ | -----: |
-| CSV + CSV   | CSV    |      ✅ |
-| XLSX + XLSX | XLSX   |      ✅ |
-| CSV + CSV   | XLSX   |      ✅ |
-| XLSX + XLSX | CSV    |      ✅ |
-| CSV + XLSX  | CSV    |      ✅ |
-| CSV + XLSX  | XLSX   |      ✅ |
+| Input | Output | Status |
+| :--- | :--- | ---: |
+| CSV + CSV | CSV | ✅ |
+| XLSX + XLSX | XLSX | ✅ |
+| CSV + CSV | XLSX | ✅ |
+| XLSX + XLSX | CSV | ✅ |
+| CSV + XLSX | CSV | ✅ |
+| CSV + XLSX | XLSX | ✅ |
 
 The tests use `pytest` and `tmp_path` for temporary output locations and Pandas dataframe comparisons.
 
@@ -578,22 +604,24 @@ It is a practical implementation that works within the tested environment while 
 
 # 📚 Documentation
 
-| File                    | Purpose                                                                   |
-| ----------------------- | ------------------------------------------------------------------------- |
-| `README.md`             | Overview, features, architecture, limitations                             |
-| `ARCHITECTURE_NOTES.md` | Design decisions, reasoning, trade-offs, and future direction             |
-| `TEST_RESULT.md`        | Functional tests, benchmarks, observed behavior, and accepted limitations |
+| File | Purpose |
+| :--- | :--- |
+| `README.md` | Overview, features, architecture, limitations |
+| `ARCHITECTURE_NOTES.md` | Design decisions, reasoning, trade-offs, and future direction |
+| `TEST_RESULT.md` | Functional tests, benchmarks, observed behavior, and accepted limitations |
 
 ---
 
 # ✅ Current Status
 
-**V1 — Functional and tested**
+**V1 — Functional, tested, and benchmarked**
 
 The current implementation successfully handles the primary CSV/XLSX concatenation workflows tested during development.
+
+Functional testing established the supported format combinations, while benchmarking established the resource and performance behavior of the V1 implementation under the documented workloads and hardware conditions.
 
 Its main architectural strength is its ability to avoid the memory behavior encountered with full in-memory `pd.concat()` workflows.
 
 Its main architectural limitation is that XLSX input is still loaded into memory before being converted into the disk-backed CSV pipeline.
 
-The project therefore represents a practical V1 rather than a final high-performance spreadsheet processing engine.
+The project therefore represents a practical V1 rather than a final high-performance spreadsheet processing engine. The benchmark results are intended to document the current implementation's behavior and trade-offs, not to serve as universal performance guarantees.

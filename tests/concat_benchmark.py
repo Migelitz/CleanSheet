@@ -5,10 +5,15 @@ import tracemalloc
 from pathlib import Path
 
 import psutil
+import pygame
+import requests
+from dotenv import load_dotenv
 
 from src.cleansheet.concatenator.tab_concat import concat_files
 from src.cleansheet.quality.quality_checker import check_quality
 
+# load all env
+load_dotenv()
 
 class SystemResourceMonitor:
     """Monitors OS-level process RAM and CPU in the background at fixed intervals."""
@@ -53,7 +58,7 @@ class SystemResourceMonitor:
             self._monitor_thread.join()
 
 
-def run_benchmark(files: list[str]) -> None:
+def run_benchmark(files: list[str], chunksize: int, output_extension: str) -> None:
 
     input_size_mb = []
 
@@ -75,10 +80,6 @@ def run_benchmark(files: list[str]) -> None:
 
     print("=" * 60)
 
-    # ===== CONFIGURATION =====
-    # Modify to preferred file extension output
-    output_extension = "csv"
-
     output_path = Path("tests").absolute() / f"benchmark_merged.{output_extension}" 
 
     # 1. Prepare Monitors
@@ -93,7 +94,7 @@ def run_benchmark(files: list[str]) -> None:
         files=files, 
         output_folder=str(output_path.parent),
         output_filename=output_path.name,
-        chunksize=50_000
+        chunksize=chunksize
         )
 
     t_end = time.perf_counter()
@@ -155,13 +156,57 @@ def run_benchmark(files: list[str]) -> None:
     print(f"  OS Peak Process RAM: {peak_rss_mb:.2f} MB  (Actual system memory hit)")
     print(f"  Net OS RAM Used:     {net_os_ram_mb:.2f} MB  (Delta above baseline)")
     print("=" * 60)
+    print()
 
 
 if __name__ == "__main__":
     import sys
 
     # Replace with a path to one of your real test datasets (guide on how to execute):
-    # python -m tests.concat_benchmark (file location of the dataset e.g. assets/test_files/quality_test.xlsx) (file location again)... 
+    # python -m tests.concat_benchmark (file location of the dataset e.g. assets/test_files/quality_test.xlsx) (file location again)... (extension name) (number of run here) (chunksize)
     # add as many files you want to concatenate
-    target_file = sys.argv[1:len(sys.argv)] if len(sys.argv) > 1 else sys.exit(1)
-    run_benchmark(target_file)
+    # -3 to take account of the run and chunksize in len(sys.argv)
+    target_file = sys.argv[1:len(sys.argv) - 3] if len(sys.argv) - 3 > 1 else sys.exit(1)
+    output_ext =sys.argv[-3] if len(sys.argv) - 3 > 1 else sys.exit(1)
+    run = int(sys.argv[-2]) if len(sys.argv) - 3 > 1 else sys.exit(1)
+    chunksize = int(sys.argv[-1]) if len(sys.argv) - 3 > 1 else sys.exit(1)
+
+    for i in range(run):
+        run_benchmark(target_file, chunksize, output_ext)
+
+    # IF active in laptop
+    # pygame.mixer.init()
+
+    # pygame.mixer.music.load("assets/music/alarm.mp3")
+
+    # pygame.mixer.music.play(-1)
+
+    # pygame.mixer.music.set_volume(1.0)
+
+    # print("Press Ctrl+C to stop...")
+
+    # try:
+    #     while pygame.mixer.music.get_busy():
+    #         time.sleep(1)
+    # except KeyboardInterrupt:
+    #     pygame.mixer.music.stop()
+
+    # IF inactive in laptop
+    NTFY_TOPIC = os.getenv("NTFY_TOPIC")
+
+    def send_alarm(title: str, message: str):
+        requests.post(
+            f"https://ntfy.sh/{NTFY_TOPIC}",
+            data=message.encode("utf-8"),
+            headers={
+                "Title": title,
+                "Priority": "urgent",
+                "Tags": "rotating_light,alarm_clock",
+            },
+            timeout=10
+        )
+
+    send_alarm(
+        title="Benchmark Complete!",
+        message="You may look at the results now."
+    )

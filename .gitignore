@@ -9,7 +9,16 @@ wheels/
 # Virtual environments
 .venv
 
+.env
+
 # Spreadsheet testing files
-*.csv
-*.xlsx  
-*.xls
+# *.csv
+# *.xlsx  
+# *.xls
+
+# VS Code configuration
+.vscode/
+
+# # TEMPORARY
+# tests/
+# assets/benchmarks/
