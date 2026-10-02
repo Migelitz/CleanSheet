@@ -256,7 +256,7 @@ wheels = [
 [[package]]
 name = "cleansheet"
 version = "1.0.0"
-source = { virtual = "." }
+source = { editable = "." }
 dependencies = [
     { name = "nameparser" },
     { name = "nuitka" },
