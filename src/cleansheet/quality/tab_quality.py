@@ -13,6 +13,7 @@ from PIL import Image, ImageTk
 from tkinterdnd2 import DND_FILES
 
 from cleansheet.quality.quality_checker import check_quality
+from cleansheet.paths import ASSETS_DIR
 
 # ==============================================================================
 # BUG FIX: tkinterdnd2 Compatibility Patch for Python 3.12+
@@ -1093,10 +1094,7 @@ def build_quality_checker_tab(parent_frame: ttk.Frame) -> None:
         dash=(8, 5),
     )
 
-    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-    ASSETS_DIR = os.path.abspath(os.path.join(BASE_DIR, "..","assets", "icons"))    
-
-    image_parse = Image.open(os.path.join(ASSETS_DIR, "upload_icon.png"))
+    image_parse = Image.open(os.path.join(ASSETS_DIR, "icons", "upload_icon.png"))
     image_parse = image_parse.resize((80, 80))
     upload_icon = ImageTk.PhotoImage(image_parse)
 

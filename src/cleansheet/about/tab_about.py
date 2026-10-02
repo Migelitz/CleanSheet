@@ -7,6 +7,8 @@ from urllib.parse import quote
 
 from PIL import Image, ImageTk
 
+from cleansheet.paths import ASSETS_DIR
+
 # CONFIGURATION 
 
 version = "1.0.0"
@@ -203,11 +205,8 @@ def build_about_tab(parent_frame: ttk.Frame) -> None:
 
 
     # ----- Logo Icon -----
-    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-    ASSETS_DIR = os.path.abspath(os.path.join(BASE_DIR, "../", "../", "../", "assets", "icons"))
-
     try:
-        img = Image.open(os.path.join(ASSETS_DIR, "cleansheet_logo.png"))
+        img = Image.open(os.path.join(ASSETS_DIR, "icons", "cleansheet_logo.png"))
         img = img.resize((150, 150))
         logo_img = ImageTk.PhotoImage(img)
         
