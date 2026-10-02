@@ -1,0 +1,3 @@
+name,email,amount
+  Alice ,Contact: alice@example.com,",200.00"
+ Bob %,bob@example.com,20%
