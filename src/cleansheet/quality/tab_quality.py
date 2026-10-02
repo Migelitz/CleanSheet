@@ -12,7 +12,7 @@ from openpyxl import load_workbook
 from PIL import Image, ImageTk
 from tkinterdnd2 import DND_FILES
 
-from quality.quality_checker import check_quality
+from cleansheet.quality.quality_checker import check_quality
 
 # ==============================================================================
 # BUG FIX: tkinterdnd2 Compatibility Patch for Python 3.12+
@@ -749,7 +749,12 @@ def show_quality_report(report: dict) -> None:
     ).pack(side="right")
 
 
-def select_file(row_size: int, view_method: str, filepath: str | None = None) -> None:
+def select_file(
+    row_size: int,
+    view_method: str,
+    filepath: str | None = None,
+    parent_frame: ttk.Frame | None = None,
+) -> None:
 
     if not filepath:
         filepath = filedialog.askopenfilename(
@@ -764,6 +769,43 @@ def select_file(row_size: int, view_method: str, filepath: str | None = None) ->
         return
 
     extension = Path(filepath).suffix.lower()
+    loading_parent = parent_frame or tk._default_root
+
+    if loading_parent is None:
+        raise RuntimeError("A Tkinter root is required to show loading feedback.")
+
+    progress_win = tk.Toplevel(loading_parent)
+    progress_win.title("Loading File")
+    progress_win.geometry("300x120")
+    progress_win.resizable(False, False)
+    progress_win.transient(loading_parent.winfo_toplevel())
+    progress_win.grab_set()
+
+    ttk.Label(
+        progress_win,
+        text="Loading file...\nPlease wait.",
+        justify="center",
+    ).pack(pady=15)
+
+    progress = ttk.Progressbar(progress_win, mode="indeterminate")
+    progress.pack(fill="x", padx=20)
+    progress.start()
+
+    def close_progress() -> None:
+        progress.stop()
+        progress_win.grab_release()
+        progress_win.destroy()
+
+    def on_success(df: pd.DataFrame) -> None:
+        close_progress()
+        show_data(df, filepath)
+
+    def on_error(error: str) -> None:
+        close_progress()
+        messagebox.showerror(
+            "File Error",
+            f"Could not load the file.\n\n{error}",
+        )
 
     def count_rows_in_file(filepath: str) -> int:
 
@@ -791,84 +833,77 @@ def select_file(row_size: int, view_method: str, filepath: str | None = None) ->
 
         return row_count
 
-    try:
-        match extension:
+    def load_data() -> None:
+        try:
+            match extension:
+                case ".csv":
+                    if view_method == "head":
+                        df = pd.read_csv(filepath, nrows=row_size + 1) # To accomodate header row for +1
 
-            case ".csv":
-
-                if view_method == "head":
-                    df = pd.read_csv(filepath, nrows=row_size + 1) # To accomodate header row that is why we have +1
-
-                elif view_method == "tail":
-                    total_rows = count_rows_in_file(filepath)
-
-                    df = pd.read_csv(
-                        filepath, 
-                        skiprows=lambda x: x != 0 and x < total_rows - row_size
-                    )
-
-                elif view_method == "random":
-                    total_rows = count_rows_in_file(filepath)
-
-                    if total_rows <= row_size:
-                        df = pd.read_csv(filepath)
-                        
-                    else:
-                        random_indices = sorted(random.sample(range(1, total_rows + 1), row_size))
+                    elif view_method == "tail":
+                        total_rows = count_rows_in_file(filepath)
 
                         df = pd.read_csv(
-                            filepath, 
-                            skiprows=lambda x: x != 0 and x not in random_indices
-                        )  
+                            filepath,
+                            skiprows=lambda x: x != 0 and x < total_rows - row_size
+                        )
 
-            case ".xlsx" | ".xls":
+                    elif view_method == "random":
+                        total_rows = count_rows_in_file(filepath)
 
-                if view_method == "head":
-                    df = pd.read_excel(
-                        filepath, 
-                        engine="calamine", 
-                        nrows=row_size + 1
-                    ) 
+                        if total_rows <= row_size:
+                            df = pd.read_csv(filepath)
+                        else:
+                            random_indices = sorted(
+                                random.sample(range(1, total_rows + 1), row_size)
+                            )
 
-                elif view_method == "tail":
-                    total_rows = count_rows_in_file(filepath)
+                            df = pd.read_csv(
+                                filepath,
+                                skiprows=lambda x: x != 0 and x not in random_indices
+                            )
 
-                    df = pd.read_excel(
-                        filepath, 
-                        engine="calamine", 
-                        skiprows=lambda x: x != 0 and x < total_rows - row_size
-                    )
+                case ".xlsx" | ".xls":
+                    if view_method == "head":
+                        df = pd.read_excel(
+                            filepath,
+                            engine="calamine",
+                            nrows=row_size + 1
+                        )
 
-                elif view_method == "random":
-                    total_rows = count_rows_in_file(filepath)
-
-                    if total_rows <= row_size:
-                        df = pd.read_excel(filepath, engine="calamine")
-                        
-                    else:
-                        random_indices = sorted(random.sample(range(1, total_rows + 1), row_size))
+                    elif view_method == "tail":
+                        total_rows = count_rows_in_file(filepath)
 
                         df = pd.read_excel(
-                            filepath, 
+                            filepath,
                             engine="calamine",
-                            skiprows=lambda x: x != 0 and x not in random_indices
-                        )  
+                            skiprows=lambda x: x != 0 and x < total_rows - row_size
+                        )
 
-            case _:
-                messagebox.showerror(
-                    "Unsupported File",
-                    "Please select a CSV or XLSX file."
-                )
-                return
+                    elif view_method == "random":
+                        total_rows = count_rows_in_file(filepath)
 
-    except Exception as e:
-        messagebox.showerror(
-            "File Error",
-            f"Could not load the file.\n\n{e!s}" # !s is modern type conversion
-        )
-        return
+                        if total_rows <= row_size:
+                            df = pd.read_excel(filepath, engine="calamine")
+                        else:
+                            random_indices = sorted(
+                                random.sample(range(1, total_rows + 1), row_size)
+                            )
 
-    show_data(df, filepath)
+                            df = pd.read_excel(
+                                filepath,
+                                engine="calamine",
+                                skiprows=lambda x: x != 0 and x not in random_indices
+                            )
+
+                case _:
+                    raise ValueError("Please select a CSV, XLSX, or XLS file.")
+
+            loading_parent.after(0, lambda: on_success(df))
+        except Exception as e:
+            loading_parent.after(0, lambda error=str(e): on_error(error))
+
+    threading.Thread(target=load_data, daemon=True).start()
 
 
 def build_quality_checker_tab(parent_frame: ttk.Frame) -> None:
@@ -1059,7 +1094,7 @@ def build_quality_checker_tab(parent_frame: ttk.Frame) -> None:
     )
 
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-    ASSETS_DIR = os.path.abspath(os.path.join(BASE_DIR, "../", "../", "../", "assets", "icons"))
+    ASSETS_DIR = os.path.abspath(os.path.join(BASE_DIR, "..","assets", "icons"))    
 
     image_parse = Image.open(os.path.join(ASSETS_DIR, "upload_icon.png"))
     image_parse = image_parse.resize((80, 80))
@@ -1128,7 +1163,8 @@ def build_quality_checker_tab(parent_frame: ttk.Frame) -> None:
         
         select_file(
             int(row_input), 
-            table_display_var.get()
+            table_display_var.get(),
+            parent_frame=parent_frame,
         )
 
     def on_drop(event):
@@ -1151,7 +1187,12 @@ def build_quality_checker_tab(parent_frame: ttk.Frame) -> None:
             )
 
         filepath = filepaths[0]
-        select_file(int(rows_entry.get()), table_display_var.get(), filepath)
+        select_file(
+            int(rows_entry.get()),
+            table_display_var.get(),
+            filepath,
+            parent_frame=parent_frame,
+        )
 
     canvas.bind("<Button-1>", on_click)
     canvas.drop_target_register(DND_FILES)
