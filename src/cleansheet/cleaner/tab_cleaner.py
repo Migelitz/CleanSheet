@@ -18,21 +18,21 @@ def clean_dataframe(
     
     cleaned = df
 
-    # 1. Text Normalization
-    if trim_text:
-        str_cols = cleaned.select_dtypes(include="object").columns
-        for col in str_cols:
-            cleaned[col] = cleaned[col].astype("string").str.strip()
-
-    # 2. Strip special characters
+    # 1. Strip special characters
     if strip_chars:
         chars = strip_chars.split(",")
-        object_columns = cleaned.select_dtypes(include="object").columns
-        for col in object_columns:
+        text_columns = cleaned.select_dtypes(include=["object", "string"]).columns
+        for col in text_columns:
             for char in chars:
                 char = char.strip()
                 if char:
-                    cleaned[col] = cleaned[col].astype("string").str.replace(char, "", regex=False)
+                    cleaned[col] = cleaned[col].astype("string").str.replace(char, "")
+
+    # 2. Text Normalization
+    if trim_text:
+        str_cols = cleaned.select_dtypes(include=["object", "string"]).columns
+        for col in str_cols:
+            cleaned[col] = cleaned[col].astype("string").str.strip()
 
     # 3. Column-specific Text Case & Advanced Formatting
     # We create a list of columns to iterate over so we can safely add new columns inside the loop
@@ -58,32 +58,32 @@ def clean_dataframe(
 
         # Used for cleaning up phone numbers, IDs, or any other numeric-only fields
         elif transformation == "Numbers Only":
-            cleaned[col] = cleaned[col].astype(str).str.replace(r"\D", "", regex=True)
+            cleaned[col] = cleaned[col].astype("string").str.replace(r"\D", "", regex=True)
 
         # Used for cleaning up currency values to just the numeric part, removing symbols like $, €, £, etc.
         elif transformation == "Clean Currency":
-            cleaned[col] = cleaned[col].astype(str).str.replace(r"[^\d.-]", "", regex=True)
+            cleaned[col] = cleaned[col].astype("string").str.replace(r"[^\d.-]", "", regex=True)
             cleaned[col] = pd.to_numeric(cleaned[col], errors="coerce")
 
         elif transformation == "Extract Email":
             # Extracts the first valid email format found in the text
-            cleaned[col] = cleaned[col].astype(str).str.extract(r'([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})')[0]
+            cleaned[col] = cleaned[col].astype("string").str.extract(r'([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})')[0]
 
         elif transformation == "Extract URL":
             # Extracts the first valid web link found in the text
-            cleaned[col] = cleaned[col].astype(str).str.extract(r'(https?://\S+|www\.\S+)')[0]
+            cleaned[col] = cleaned[col].astype("string").str.extract(r'(https?://\S+|www\.\S+)')[0]
 
         elif transformation == "Anonymize Email":
             # Turns "john.doe@gmail.com" into "j***@gmail.com"
-            cleaned[col] = cleaned[col].astype(str).str.replace(r'(?<=.).(?=.*@)', '*', regex=True)
+            cleaned[col] = cleaned[col].astype("string").str.replace(r'(?<=.).(?=.*@)', '*', regex=True)
             
         elif transformation == "Anonymize Numbers (Keep Last 4)":
             # Replaces all digits except the last 4 with asterisks (great for IDs/Credit Cards)
-            cleaned[col] = cleaned[col].astype(str).str.replace(r'\d(?=\d{4})', '*', regex=True)
+            cleaned[col] = cleaned[col].astype("string").str.replace(r'\d(?=\d{4})', '*', regex=True)
 
         elif transformation == "Split Human Names":
             # Parses names like "Dr. John W. Doe Jr." and creates two NEW columns next to it
-            parsed_names = cleaned[col].astype(str).apply(lambda x: HumanName(x) if pd.notna(x) else None)
+            parsed_names = cleaned[col].astype("string").apply(lambda x: HumanName(x) if pd.notna(x) else None)
             
             col_idx = cleaned.columns.get_loc(col)
             # Insert First and Last name columns immediately after the original column
