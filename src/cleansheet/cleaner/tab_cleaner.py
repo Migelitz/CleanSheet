@@ -1,4 +1,6 @@
+import logging
 import threading
+import time
 import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
@@ -6,6 +8,8 @@ from tkinter import filedialog, messagebox, ttk
 import pandas as pd
 from nameparser import HumanName
 from tkinterdnd2 import DND_FILES
+
+logger = logging.getLogger(__name__)
 
 
 def clean_dataframe(
@@ -16,6 +20,15 @@ def clean_dataframe(
     column_transformations: dict,
 ) -> pd.DataFrame:
     
+    logger.debug(
+        "Starting DataFrame cleaning: rows=%s columns=%s trim_text=%s fill_missing=%s strip_chars=%s transformations=%s",
+        len(df),
+        len(df.columns),
+        trim_text,
+        fill_missing,
+        bool(strip_chars),
+        len(column_transformations),
+    )
     cleaned = df
 
     # 1. Strip special characters
@@ -96,6 +109,11 @@ def clean_dataframe(
     elif fill_missing == "Fill 'N/A'":
         cleaned = cleaned.fillna("N/A")
 
+    logger.debug(
+        "Completed DataFrame cleaning: rows=%s columns=%s",
+        len(cleaned),
+        len(cleaned.columns),
+    )
     return cleaned
 
 
@@ -137,6 +155,7 @@ def build_cleaner_tab(parent_frame: ttk.Frame) -> None:
             return
 
         extension = Path(filepath).suffix.lower()
+        logger.info("Loading cleaner input file: %s", Path(filepath).name)
 
         # Optimization: Read dataset headings only instead of reading everything
         try:
@@ -150,12 +169,14 @@ def build_cleaner_tab(parent_frame: ttk.Frame) -> None:
                 messagebox.showwarning("Invalid File", "Please select a CSV or Excel file.")
                 return
             
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to read file headers:\n{e!s}")
+        except Exception:
+            logger.exception("Failed to read cleaner file headers for %s", Path(filepath).name)
+            messagebox.showerror("Error", "Failed to read file headers. Please check the file and try again.")
             return
 
         loaded_file["columns"] = columns
         loaded_file["path"] = filepath
+        logger.info("Cleaner input file loaded: %s (%s columns)", Path(filepath).name, len(columns))
 
         file_label.config(
             text=f"Loaded: {Path(filepath).name} ({len(columns):,} columns)"
@@ -376,6 +397,7 @@ def build_cleaner_tab(parent_frame: ttk.Frame) -> None:
     # ==========================================
     def export_clean() -> None:
         if not loaded_file.get("path"):
+            logger.warning("Cleaner export attempted without a selected file")
             messagebox.showwarning("Warning", "Please select a file first.")
             return
 
@@ -385,7 +407,14 @@ def build_cleaner_tab(parent_frame: ttk.Frame) -> None:
         )
 
         if not save_path:
+            logger.info("Cleaner export cancelled by user")
             return
+
+        logger.info(
+            "Starting cleaner export: source=%s destination=%s",
+            Path(loaded_file["path"]).name,
+            Path(save_path).name,
+        )
 
         # 1. Grab all UI variable states BEFORE launching the thread (Tkinter isn't thread-safe)
         dupes_val = var_dupes.get()
@@ -422,7 +451,9 @@ def build_cleaner_tab(parent_frame: ttk.Frame) -> None:
 
         # 3. The actual processing logic (runs in background)
         def process_data_thread():
+            started_at = time.perf_counter()
             try:
+                logger.info("Cleaner background export started for %s", Path(file_path).name)
                 extension = Path(file_path).suffix.lower()
                 save_is_csv = Path(save_path).suffix.lower() == ".csv"
                 is_csv = extension == ".csv"
@@ -494,10 +525,23 @@ def build_cleaner_tab(parent_frame: ttk.Frame) -> None:
                     else:
                         cleaned.to_excel(save_path, index=False)
 
+                duration = time.perf_counter() - started_at
+                logger.info(
+                    "Cleaner background export completed for %s in %.2fs with %s rows remaining",
+                    Path(file_path).name,
+                    duration,
+                    total_rows,
+                )
                 # 4. Safely update the GUI when finished
                 parent_frame.after(0, lambda: on_success(total_rows))
 
             except Exception as e:
+                duration = time.perf_counter() - started_at
+                logger.exception(
+                    "Cleaner background export failed after %.2fs for %s",
+                    duration,
+                    Path(file_path).name,
+                )
                 # Safely update GUI on error
                 parent_frame.after(0, lambda error=str(e): on_error(error))
 

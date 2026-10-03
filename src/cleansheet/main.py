@@ -1,3 +1,4 @@
+import logging
 import os
 import sys
 import tkinter as tk
@@ -9,6 +10,9 @@ from cleansheet.about.tab_about import build_about_tab
 from cleansheet.cleaner.tab_cleaner import build_cleaner_tab
 from cleansheet.concatenator.tab_concat import build_concatenator_tab
 from cleansheet.quality.tab_quality import build_quality_checker_tab
+from cleansheet.logging_config import setup_logging
+
+logger = logging.getLogger(__name__)
 
 
 def center_window(window: TkinterDnD.Tk, width: int, height: int) -> None:
@@ -22,6 +26,9 @@ def center_window(window: TkinterDnD.Tk, width: int, height: int) -> None:
 
 
 def main() -> None:
+    setup_logging()
+
+    logger.info("Starting CleanSheet application")
 
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     ASSETS_DIR = os.path.join(BASE_DIR, "assets", "icons")
@@ -56,12 +63,15 @@ def main() -> None:
     notebook.add(cleaner_tab, text="Spreadsheet Cleaner")
     notebook.add(about_tab, text="About")
 
+    logger.info("Building application tabs")
     build_concatenator_tab(concat_tab)
     build_quality_checker_tab(quality_tab)
     build_cleaner_tab(cleaner_tab)
     build_about_tab(about_tab)
+    logger.info("Application UI initialized; entering Tkinter main loop")
 
     root.mainloop()
+    logger.info("CleanSheet main loop exited")
 
 
 if __name__ == "__main__":

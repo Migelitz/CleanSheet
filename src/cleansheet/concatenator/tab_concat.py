@@ -1,10 +1,14 @@
+import logging
 import threading
+import time
 import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
 import pandas as pd
 from tkinterdnd2 import DND_FILES
+
+logger = logging.getLogger(__name__)
 
 # ========================================================
 # DATA PROCESSING FUNCTIONS
@@ -23,6 +27,7 @@ def stream_to_csv(
     into memory before being written.
     """
 
+    logger.info("Starting CSV stream merge into %s with %s files", output_path.name, len(files))
     is_first_write = True
     expected_columms = None
 
@@ -30,6 +35,7 @@ def stream_to_csv(
         extension = Path(filepath).suffix.lower()
 
         if extension == ".csv":
+            logger.debug("Merging CSV chunk source: %s", Path(filepath).name)
             # Stream CSV in chunks to avoid loading full dataset into memory
             for chunk in pd.read_csv(filepath, chunksize=chunksize):
                 if expected_columms is None:
@@ -46,6 +52,7 @@ def stream_to_csv(
                 is_first_write = False
 
         elif extension == ".xlsx":
+            logger.debug("Merging Excel source: %s", Path(filepath).name)
             # Load individual excel file, write immediately, then free memory
             df = pd.read_excel(filepath, engine="calamine")
 
@@ -63,6 +70,7 @@ def stream_to_csv(
             is_first_write = False
 
         else:
+            logger.error("Unsupported concatenator input format: %s for %s", extension, Path(filepath).name)
             raise ValueError(f"Unsupported format: {extension}")
 
 
@@ -77,7 +85,10 @@ def concat_files(
 
     folder_path = Path(output_folder.strip())
 
+    logger.info("Starting file concatenation: files=%s output_dir=%s output_name=%s", len(files), folder_path.name, output_filename)
+
     if not folder_path.exists() or not folder_path.is_dir():
+        logger.error("Concatenation destination folder does not exist: %s", folder_path)
         raise ValueError("The selected destination folder does not exist.")
 
     clean_filename = output_filename.strip()
@@ -97,6 +108,7 @@ def concat_files(
         temp_csv = folder_path / f"~temp_{clean_filename}.csv"
         stream_to_csv(files=files, output_path=temp_csv, chunksize=chunksize)
 
+        logger.info("Preparing Excel output for %s from %s files", output_path.name, len(files))
         with pd.ExcelWriter(
             output_path,
             engine="xlsxwriter",
@@ -108,6 +120,11 @@ def concat_files(
             for chunk in pd.read_csv(temp_csv, chunksize=chunksize):
 
                 if current_row + len(chunk) > EXCEl_MAX_ROWS:
+                    logger.warning(
+                        "Excel row limit reached while concatenating %s; truncating output to %s rows",
+                        output_path.name,
+                        EXCEl_MAX_ROWS,
+                    )
                     messagebox.showwarning(
                         "Excel Row Limit",
                         "Merged data exceeds Excel's row limit of 1,048,576 rows. "
@@ -141,10 +158,13 @@ def concat_files(
             temp_csv.unlink()
 
     else:
+        logger.error("Concatenation output format unsupported: %s", extension)
         raise ValueError(
             f"Unsupported output format: {extension}. "
             "Supported formats are .csv and .xlsx."
         )
+
+    logger.info("File concatenation completed successfully: %s", output_path.name)
 
 
 # ========================================================
@@ -261,13 +281,16 @@ def build_concatenator_tab(parent_frame) -> None:
                     tk.END,
                     Path(clean_path).name,
                 )
+                logger.info("Added file to concatenation queue: %s", Path(clean_path).name)
             elif extension not in valid_extensions:
+                logger.warning("Unsupported file type dropped into concatenator: %s", Path(clean_path).name)
                 messagebox.showwarning(
                     "Unsupported File Type",
                     f"The file '{Path(clean_path).name}' has an unsupported format.\n\n"
                     "Supported formats are: CSV (.csv), Excel (.xlsx)."
                 )
             elif clean_path in uploaded_files:
+                logger.info("Duplicate concatenation file ignored: %s", Path(clean_path).name)
                 messagebox.showinfo(
                     "Duplicate File",
                     f"The file '{Path(clean_path).name}' has already been added."
@@ -567,7 +590,13 @@ def build_concatenator_tab(parent_frame) -> None:
         progress.start()
 
         def merge_in_thread():
+            started_at = time.perf_counter()
             try:
+                logger.info(
+                    "Background concatenation started: files=%s output=%s",
+                    len(uploaded_files),
+                    output_entry.get(),
+                )
                 concat_files(
                     files=uploaded_files,
                     output_folder=folder_path_entry.get(),
@@ -575,9 +604,17 @@ def build_concatenator_tab(parent_frame) -> None:
                     chunksize=int(chunk_size_entry.get())
                 )
 
+                duration = time.perf_counter() - started_at
+                logger.info("Background concatenation completed in %.2fs", duration)
                 parent_frame.after(0, on_success)
 
             except Exception as e:
+                duration = time.perf_counter() - started_at
+                logger.exception(
+                    "Background concatenation failed after %.2fs with %s files",
+                    duration,
+                    len(uploaded_files),
+                )
                 parent_frame.after(0, lambda error=str(e): on_error(error))
 
         def on_success():

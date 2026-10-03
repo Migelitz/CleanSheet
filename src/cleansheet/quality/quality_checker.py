@@ -1,3 +1,4 @@
+import logging
 from collections import defaultdict
 from itertools import chain, combinations
 from pathlib import Path
@@ -5,10 +6,14 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+logger = logging.getLogger(__name__)
+
 
 def check_quality(filepath: Path) -> dict:
 
     """Inspect a DataFrame and return a data-quality report."""
+
+    logger.info("Starting data quality analysis for %s", filepath.name)
 
     # ========================================================
     # CONFIGURATION
@@ -142,7 +147,9 @@ def check_quality(filepath: Path) -> dict:
         chunks = (df.iloc[i:i + chunk_size] for i in range(0, len(df), chunk_size))
 
     else:
-        raise ValueError(f"Unsupported file extension: {extension}. Only .csv, .xls, and .xlsx are supported.")
+        message = f"Unsupported file extension: {extension}. Only .csv, .xls, and .xlsx are supported."
+        logger.error("Data quality analysis rejected unsupported file type: %s", filepath.name)
+        raise ValueError(message)
 
     # ----- Data that can be done at once -----
 
@@ -275,6 +282,14 @@ def check_quality(filepath: Path) -> dict:
             running_sum_xy.pop(col, None)
 
     duplicate_counts = total_rows - len(is_seen)  # Total duplicates across all chunks
+
+    logger.info(
+        "Data quality analysis completed for %s: rows=%s columns=%s duplicate_count=%s",
+        filepath.name,
+        total_rows,
+        total_cols,
+        duplicate_counts,
+    )
 
     unique_values = {
         col: vals 

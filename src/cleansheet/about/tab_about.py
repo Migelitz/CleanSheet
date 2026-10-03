@@ -1,9 +1,12 @@
+import logging
 import os
 import platform
 import tkinter as tk
 import webbrowser
 from tkinter import ttk
 from urllib.parse import quote
+
+logger = logging.getLogger(__name__)
 
 from PIL import Image, ImageTk
 
@@ -214,8 +217,8 @@ def build_about_tab(parent_frame: ttk.Frame) -> None:
         logo_label.image = logo_img 
         logo_label.pack(pady=(0, 10))
 
-    except Exception as e:
-        print(f"Could not load logo: {e}")
+    except Exception:
+        logger.warning("Could not load application logo", exc_info=True)
 
     # ----- Title & Version -----
     title_label = ttk.Label(

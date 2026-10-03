@@ -1,7 +1,9 @@
 import csv
+import logging
 import os
 import random
 import threading
+import time
 import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
@@ -14,6 +16,8 @@ from tkinterdnd2 import DND_FILES
 
 from cleansheet.quality.quality_checker import check_quality
 from cleansheet.paths import ASSETS_DIR
+
+logger = logging.getLogger(__name__)
 
 # ==============================================================================
 # BUG FIX: tkinterdnd2 Compatibility Patch for Python 3.12+
@@ -152,6 +156,7 @@ def show_data(df: pd.DataFrame, filepath: str) -> None:
 
     def open_quality_report() -> None:
 
+        logger.info("Opening quality report for %s", Path(filepath).name)
         quality_button.config(
             text="Processing... Please wait",
             state=tk.DISABLED
@@ -184,15 +189,29 @@ def show_data(df: pd.DataFrame, filepath: str) -> None:
         progress.start()
 
         def run_background_task() -> None:
+            started_at = time.perf_counter()
             try:
+                logger.info("Quality report generation started for %s", Path(filepath).name)
                 # Fetch the quality report
                 report = check_quality(filepath=Path(filepath))
 
                 # IMPORTANT: Tkinter is NOT thread-safe. You cannot update the UI 
                 # from a background thread. We use .after(0, ...) to push the 
                 # report back to the Main Thread so it can safely draw the new window.
+                duration = time.perf_counter() - started_at
+                logger.info(
+                    "Quality report generation completed for %s in %.2fs",
+                    Path(filepath).name,
+                    duration,
+                )
                 parent_frame.after(0, lambda: on_success(report))
             except Exception as e:
+                duration = time.perf_counter() - started_at
+                logger.exception(
+                    "Quality report generation failed after %.2fs for %s",
+                    duration,
+                    Path(filepath).name,
+                )
                 parent_frame.after(0, lambda error=str(e): on_error(error))
 
         def on_success(report: dict) -> None:
@@ -767,7 +786,10 @@ def select_file(
         )
 
     if not filepath:
+        logger.info("File selection cancelled by user")
         return
+
+    logger.info("Loading preview rows=%s mode=%s file=%s", row_size, view_method, Path(filepath).name)
 
     extension = Path(filepath).suffix.lower()
     loading_parent = parent_frame or tk._default_root
@@ -835,7 +857,9 @@ def select_file(
         return row_count
 
     def load_data() -> None:
+        started_at = time.perf_counter()
         try:
+            logger.info("Preview data load started for %s", Path(filepath).name)
             match extension:
                 case ".csv":
                     if view_method == "head":
@@ -900,8 +924,21 @@ def select_file(
                 case _:
                     raise ValueError("Please select a CSV, XLSX, or XLS file.")
 
+            duration = time.perf_counter() - started_at
+            logger.info(
+                "Preview data load completed for %s in %.2fs (%s rows)",
+                Path(filepath).name,
+                duration,
+                len(df),
+            )
             loading_parent.after(0, lambda: on_success(df))
         except Exception as e:
+            duration = time.perf_counter() - started_at
+            logger.exception(
+                "Preview data load failed after %.2fs for %s",
+                duration,
+                Path(filepath).name,
+            )
             loading_parent.after(0, lambda error=str(e): on_error(error))
 
     threading.Thread(target=load_data, daemon=True).start()
@@ -1153,6 +1190,7 @@ def build_quality_checker_tab(parent_frame: ttk.Frame) -> None:
     def on_click(event) -> None:
         row_input = rows_entry.get().strip()
         if not row_input:
+            logger.warning("Missing row input while selecting quality preview file")
             messagebox.showerror(
                 "Missing Information", 
                 "Row entry cannot be empty. Please enter a valid number."
@@ -1168,6 +1206,7 @@ def build_quality_checker_tab(parent_frame: ttk.Frame) -> None:
     def on_drop(event):
         row_input = rows_entry.get().strip()
         if not row_input:
+            logger.warning("Missing row input while dropping quality preview file")
             messagebox.showerror(
                 "Missing Information", 
                 "Row entry cannot be empty. Please enter a valid number."
