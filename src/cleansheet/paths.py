@@ -1,5 +1,10 @@
 from pathlib import Path
 
+"""
+Nuitka and source file location of assets directory is different.
+Therefore I created this to allow both execution on pre-compiled
+and post-compiled
+"""
 
 BASE_DIR = Path(__file__).resolve().parent
 
