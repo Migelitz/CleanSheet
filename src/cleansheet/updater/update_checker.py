@@ -1,18 +1,12 @@
 import logging
-import os
 from dataclasses import dataclass
 from importlib.metadata import PackageNotFoundError, version
 
 import requests
-from dotenv import load_dotenv
 
 logger = logging.getLogger(__name__)
 
 GITHUB_API_URL = "https://api.github.com/repos/Migelitz/CleanSheet/releases/latest"
-
-load_dotenv()
-
-TOKEN = os.getenv("GITHUB_TOKEN")
 
 @dataclass(frozen=True)
 class UpdateInfo:
@@ -61,7 +55,6 @@ def check_for_update() -> UpdateInfo | None:
             headers={
                 "Accept": "application/vnd.github+json",
                 "User-Agent": "CleanSheet-Updater",
-                "Authorization": f"Bearer {TOKEN}"
             },
             timeout=10,
         )
