@@ -43,7 +43,7 @@ The application currently contains four main tabs:
 * **Spreadsheet Concatenator** — combine compatible spreadsheet files into one dataset.
 * **Data Quality Checker** — inspect a dataset for structural, missing-value, numerical, duplication, statistical, and cardinality-related issues.
 * **Spreadsheet Cleaner** — configure cleaning and transformation operations before exporting the processed dataset.
-* **About** — project information, links, and feedback options.
+* **About** — project information, update checking, repository links, and feedback/support options.
 
 The three data-processing tools can be used independently depending on the task.
 
@@ -157,6 +157,34 @@ Available transformations include:
 
 ---
 
+## Application Support
+
+CleanSheet includes built-in features for maintaining and supporting the application after installation.
+
+### Update Checking
+
+The **About** tab can check whether a newer version of CleanSheet is available.
+
+* Automatically checks for updates during application startup.
+* Manually check for updates at any time.
+* Displays the currently installed version and latest available version.
+* Provides a direct link to the corresponding GitHub release.
+* Performs update checks in the background so the GUI remains responsive.
+
+### Feedback & Diagnostic Reporting
+
+CleanSheet includes a built-in feedback workflow for reporting bugs, suggestions, and other issues.
+
+* Opens a pre-filled feedback email with application and operating-system information.
+* Allows users to prepare a diagnostic ZIP containing relevant application logs.
+* Allows users to open the diagnostic-log directory directly.
+* Diagnostic logs are generated locally and are **not automatically uploaded or transmitted**.
+* Users can review and manually attach the diagnostic ZIP to their feedback email.
+
+The diagnostic reporting workflow is designed to make troubleshooting easier without requiring users to manually locate CleanSheet's log files.
+
+---
+
 # Supported Formats
 
 | Component                | CSV | XLSX | XLS |
@@ -202,7 +230,7 @@ Apply configurable cleaning and transformation rules.
 
 ### About
 
-View project information, repository links, GitHub profile information, and feedback options.
+View project information, check for application updates, access repository links, and report feedback with optional diagnostic logs.
 
 ---
 
@@ -336,6 +364,8 @@ CleanSheet has been evaluated using several types of testing:
 * Large-workload benchmarks
 * Memory and processing measurements
 * Edge-case validation
+
+Automated tests also cover supporting application functionality, including diagnostic archive creation, missing-log handling, archive failure cleanup, diagnostic privacy checks, Linux diagnostic-directory handling, and graceful handling of unsupported platforms.
 
 The development process also included workload-specific benchmarking for larger spreadsheet datasets.
 
