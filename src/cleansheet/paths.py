@@ -4,7 +4,7 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent
 
 _SOURCE_ASSETS = BASE_DIR.parents[1] / "assets"
-_PACKAGED_ASSETS = BASE_DIR / "assets"
+_PACKAGED_ASSETS = BASE_DIR.parent / "assets"
 
 # Check if the assets is inside of package (src/cleansheet)
 # Pre-compiled assets location
