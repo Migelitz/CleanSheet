@@ -23,6 +23,7 @@ from cleansheet.paths import ASSETS_DIR
 # CONFIGURATION 
 
 __version__ = get_current_version()
+update_check_running = False
 
 def open_link(url: str) -> bool:
     """Open a URL in the user's default web browser."""
@@ -485,21 +486,70 @@ def build_about_tab(parent_frame: ttk.Frame) -> None:
 
     def check_update() -> None:
         """Run the update check in the background."""
+
+        global update_check_running
+
+        if update_check_running:
+            logger.warning("Check update is already running. Dropping new run.")
+            return
+
+        update_check_running = True
         logger.debug("Starting background update check")
+
+        try:
+            result = check_for_update()
+
+        except Exception:
+            logger.exception("Unexpected failure during update check")
+
+            try:
+                parent_frame.after(0, handle_update_failure)
+
+            except Exception:
+                logger.exception("Could not schedule update failure callback")
+
+        else:
+            try:
+                parent_frame.after(0, lambda: handle_update_result(result))
+
+            except Exception:
+                logger.exception("Could not schedule update result callback")
+
+        finally:
+            update_check_running = False
+
+    def check_update_on_startup() -> None:
+        """Run a silent update check during application startup."""
+        logger.debug("Starting automatic startup update check")
+
         try:
             result = check_for_update()
         except Exception:
-            logger.exception("Unexpected failure during update check")
-            try:
-                parent_frame.after(0, handle_update_failure)
-            except Exception:
-                logger.exception("Could not schedule update failure callback")
+            logger.exception("Unexpected failure during startup update check")
             return
 
-        try:
-            parent_frame.after(0, lambda: handle_update_result(result))
-        except Exception:
-            logger.exception("Could not schedule update result callback")
+        if result is None:
+            logger.debug("Startup update check returned no result")
+            return
+
+        if not result.update_available:
+            logger.debug("No update available during startup check")
+            return
+
+        logger.info(
+            "Startup update check found a new version: current=%s latest=%s",
+            result.current_version,
+            result.latest_version,
+        )
+
+        parent_frame.after(0, lambda: popup_update_window(result))
+
+    def start_startup_update_check() -> None:
+        """Start the automatic update check without blocking the GUI."""
+        threading.Thread(
+            target=check_update_on_startup,
+            daemon=True,
+        ).start()
 
     def start_check_update() -> None:
         """Start the update check without blocking the GUI."""
@@ -619,3 +669,5 @@ def build_about_tab(parent_frame: ttk.Frame) -> None:
         "<Button-1>",
         lambda e: open_feedback_email(), 
     )
+
+    parent_frame.after(1000, start_startup_update_check)
