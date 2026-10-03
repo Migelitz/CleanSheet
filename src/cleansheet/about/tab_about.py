@@ -1,10 +1,18 @@
 import logging
 import os
 import platform
+import threading
 import tkinter as tk
 import webbrowser
-from tkinter import ttk
+from tkinter import messagebox, ttk
+from typing import Any, cast
 from urllib.parse import quote
+
+from cleansheet.updater.update_checker import (
+    UpdateInfo,
+    check_for_update,
+    get_current_version,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -14,13 +22,33 @@ from cleansheet.paths import ASSETS_DIR
 
 # CONFIGURATION 
 
-version = "1.0.0"
+__version__ = get_current_version()
 
-def open_link(url: str) -> None:
-    """Opens a URL in the user's default web browser."""
-    webbrowser.open_new_tab(url)
+def open_link(url: str) -> bool:
+    """Open a URL in the user's default web browser."""
+    try:
+        opened = webbrowser.open_new_tab(url)
+    except Exception:
+        logger.exception("Could not open external link")
+        messagebox.showerror(
+            "Unable to Open Link",
+            "CleanSheet could not open the link in your default browser.",
+        )
+        return False
+
+    if not opened:
+        logger.warning("Default browser declined to open external link")
+        messagebox.showerror(
+            "Unable to Open Link",
+            "CleanSheet could not open the link in your default browser.",
+        )
+        return False
+
+    logger.debug("Opened external link")
+    return True
 
 def open_feedback_email() -> None:
+    """Open the feedback client and provide a manual fallback."""
     email = "macalla.chyrusmiguel@gmail.com"
     subject = "Support & Feedback - CleanSheet Utility"
     user_os = platform.system()
@@ -33,25 +61,49 @@ def open_feedback_email() -> None:
 
         "---------------------------\n"
         "Technical Details (Do not change):\n"
-        f"App: CleanSheet Utility {version}\n"
+        f"App: CleanSheet Utility {__version__}\n"
         f"OS: {user_os} {os_release}"
     )
 
     # Safely convert spaces and symbols so web browsers can read them
     mailto_url = f"mailto:{email}?subject={quote(subject)}&body={quote(body)}"
 
-    webbrowser.open(mailto_url, new=2)  # This triggers the OS to open their default mail client
+    try:
+        opened = webbrowser.open(mailto_url, new=2)
+    except Exception:
+        logger.exception("Could not open feedback email client")
+        messagebox.showerror(
+            "Unable to Open Email",
+            "CleanSheet could not open your email client. You can use the manual copy option instead.",
+        )
+    else:
+        if not opened:
+            logger.warning("Default email client declined to open mailto link")
+            messagebox.showerror(
+                "Unable to Open Email",
+                "CleanSheet could not open your email client. You can use the manual copy option instead.",
+            )
+        else:
+            logger.info("Feedback email workflow opened")
 
     # ============================================================================
     # Manual copy-paste option for users who may have issues with the mailto link
     # ============================================================================
 
-    dialog = tk.Toplevel()
-    dialog.title("Send Feedback")
-    dialog.geometry("520x420")
-    dialog.resizable(False, False)
-    dialog.focus_set()
-    dialog.lift()
+    try:
+        dialog = tk.Toplevel()
+        dialog.title("Send Feedback")
+        dialog.geometry("520x420")
+        dialog.resizable(False, False)
+        dialog.focus_set()
+        dialog.lift()
+    except Exception:
+        logger.exception("Could not create feedback fallback dialog")
+        messagebox.showerror(
+            "Unable to Send Feedback",
+            "CleanSheet could not open the manual feedback window.",
+        )
+        return
     
     # Container with padding
     container = ttk.Frame(dialog, padding="16")
@@ -74,9 +126,20 @@ def open_feedback_email() -> None:
 
     # Helper for temporary button feedback
     def copy_with_feedback(button: ttk.Button, text: str, default_label: str) -> None:
-        dialog.clipboard_clear()
-        dialog.clipboard_append(text)
-        dialog.update()
+        try:
+            dialog.clipboard_clear()
+            dialog.clipboard_append(text)
+            dialog.update()
+        except Exception:
+            logger.exception("Could not copy feedback text to clipboard")
+            messagebox.showerror(
+                "Unable to Copy",
+                "CleanSheet could not copy the text to your clipboard.",
+                parent=dialog,
+            )
+            return
+
+        logger.debug("Copied feedback text to clipboard")
         button.config(text="Copied!")
         dialog.after(1500, lambda: button.config(text=default_label))
 
@@ -119,6 +182,8 @@ def open_feedback_email() -> None:
 
     close_btn = ttk.Button(btn_bar, text="Done", command=dialog.destroy)
     close_btn.pack(side="right")
+
+    
 
 def build_about_tab(parent_frame: ttk.Frame) -> None:
 
@@ -214,7 +279,7 @@ def build_about_tab(parent_frame: ttk.Frame) -> None:
         logo_img = ImageTk.PhotoImage(img)
         
         logo_label = ttk.Label(main_container, image=logo_img)
-        logo_label.image = logo_img 
+        cast(Any, logo_label).image = logo_img
         logo_label.pack(pady=(0, 10))
 
     except Exception:
@@ -230,11 +295,247 @@ def build_about_tab(parent_frame: ttk.Frame) -> None:
 
     version_label = ttk.Label(
         main_container,
-        text=f"Version {version}",
+        text=__version__,
         font=("TkDefaultFont", 10)
     )
-    version_label.pack(pady=(0, 20))
+    version_label.pack(pady=(0, 5))
 
+    # ----- Update checking -----
+    def popup_update_window(result: UpdateInfo) -> None:
+        update_window = tk.Toplevel()
+        update_window.title("Update Available")
+        update_window.resizable(False, False)
+
+        # Keep the popup above the main application.
+        update_window.transient(parent_frame.winfo_toplevel())
+
+        update_container = ttk.Frame(
+            update_window,
+            padding=24,
+        )
+        update_container.pack(fill="both", expand=True)
+
+        # ----- Header -----
+        header_label = ttk.Label(
+            update_container,
+            text="Update Available",
+            font=("TkDefaultFont", 16, "bold"),
+        )
+        header_label.pack(pady=(0, 6))
+
+        description_label = ttk.Label(
+            update_container,
+            text="A newer version of CleanSheet is available.",
+            font=("TkDefaultFont", 10),
+        )
+        description_label.pack(pady=(0, 18))
+
+        # ----- Version Information -----
+        version_frame = ttk.Frame(update_container)
+        version_frame.pack(fill="x", pady=(0, 20))
+
+        ttk.Label(
+            version_frame,
+            text="Current version:",
+            font=("TkDefaultFont", 10),
+        ).grid(
+            row=0,
+            column=0,
+            sticky="w",
+            padx=(0, 20),
+            pady=3,
+        )
+
+        ttk.Label(
+            version_frame,
+            text=result.current_version,
+            font=("TkDefaultFont", 10, "bold"),
+        ).grid(
+            row=0,
+            column=1,
+            sticky="e",
+            pady=3,
+        )
+
+        ttk.Label(
+            version_frame,
+            text="Latest version:",
+            font=("TkDefaultFont", 10),
+        ).grid(
+            row=1,
+            column=0,
+            sticky="w",
+            padx=(0, 20),
+            pady=3,
+        )
+
+        ttk.Label(
+            version_frame,
+            text=result.latest_version,
+            font=("TkDefaultFont", 10, "bold"),
+        ).grid(
+            row=1,
+            column=1,
+            sticky="e",
+            pady=3,
+        )
+
+        version_frame.columnconfigure(1, weight=1)
+
+        # ----- Buttons -----
+        button_container = ttk.Frame(update_container)
+        button_container.pack()
+
+        view_button = ttk.Button(
+            button_container,
+            text="View Update",
+            command=lambda: open_link(result.release_url),
+        )
+        view_button.pack(
+            side="left",
+            padx=5,
+        )
+
+        later_button = ttk.Button(
+            button_container,
+            text="Later",
+            command=update_window.destroy,
+        )
+        later_button.pack(
+            side="left",
+            padx=5,
+        )
+
+        # ----- Window Positioning -----
+        update_window.update_idletasks()
+
+        parent_window = parent_frame.winfo_toplevel()
+
+        parent_x = parent_window.winfo_x()
+        parent_y = parent_window.winfo_y()
+        parent_width = parent_window.winfo_width()
+        parent_height = parent_window.winfo_height()
+
+        popup_width = update_window.winfo_width()
+        popup_height = update_window.winfo_height()
+
+        x = parent_x + (parent_width - popup_width) // 2
+        y = parent_y + (parent_height - popup_height) // 2
+
+        update_window.geometry(f"+{x}+{y}")
+
+        update_window.grab_set()
+        update_window.focus_set()
+
+    def handle_update_result(result: UpdateInfo | None) -> None:
+        if result is None:
+            logger.debug("Update check returned no result; restoring update button")
+            update_button.config(
+                text="Check for Updates",
+                state="normal",
+            )
+            return
+
+        if result.update_available:
+            logger.info(
+                "Update available: current=%s latest=%s",
+                result.current_version,
+                result.latest_version,
+            )
+            update_button.config(
+                text="Update Available",
+                state="normal",
+            )
+
+            try:
+                popup_update_window(result)
+            except Exception:
+                logger.exception("Could not display update-available window")
+                update_button.config(
+                    text="Check for Updates",
+                    state="normal",
+                )
+                messagebox.showerror(
+                    "Unable to Show Update",
+                    "CleanSheet found an update but could not display the update window.",
+                    parent=parent_frame.winfo_toplevel(),
+                )
+
+        else:
+            logger.info("No CleanSheet update is available")
+            update_button.config(
+                text="Up to Date",
+                state="normal",
+            )
+
+            # Little delay to show 'Up to date' text
+            parent_frame.after(2500, lambda: update_button.config(text="Check for Updates"))
+
+    def handle_update_failure() -> None:
+        """Restore the update control and report an unexpected worker failure."""
+        update_button.config(
+            text="Check for Updates",
+            state="normal",
+        )
+        messagebox.showerror(
+            "Unable to Check for Updates",
+            "CleanSheet could not complete the update check. Please try again later.",
+            parent=parent_frame.winfo_toplevel(),
+        )
+
+    def check_update() -> None:
+        """Run the update check in the background."""
+        logger.debug("Starting background update check")
+        try:
+            result = check_for_update()
+        except Exception:
+            logger.exception("Unexpected failure during update check")
+            try:
+                parent_frame.after(0, handle_update_failure)
+            except Exception:
+                logger.exception("Could not schedule update failure callback")
+            return
+
+        try:
+            parent_frame.after(0, lambda: handle_update_result(result))
+        except Exception:
+            logger.exception("Could not schedule update result callback")
+
+    def start_check_update() -> None:
+        """Start the update check without blocking the GUI."""
+
+        logger.info("User initiated update check")
+
+        update_button.config(
+            text="Checking...",
+            state="disabled",
+        )
+
+        # To keep GUI responsive while checking update
+        try:
+            threading.Thread(
+                target=check_update,
+                daemon=True,
+            ).start()
+        except Exception:
+            logger.exception("Could not start update-check worker")
+            update_button.config(
+                text="Check for Updates",
+                state="normal",
+            )
+            messagebox.showerror(
+                "Unable to Check for Updates",
+                "CleanSheet could not start the update check. Please try again.",
+                parent=parent_frame.winfo_toplevel(),
+            )
+
+    update_button = ttk.Button(
+        main_container,
+        text="Check for Updates",
+        cursor="hand2",
+        command=start_check_update,
+    )
+    update_button.pack(pady=(5, 10))
 
     # ----- Description -----
     description_text = (
