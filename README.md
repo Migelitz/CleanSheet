@@ -6,25 +6,13 @@ CleanSheet is a Python desktop application for spreadsheet data processing and a
 
 CleanSheet was originally built as a personal automation project and portfolio project, and has grown into a complete desktop application focused on practical spreadsheet workflows, resource-aware processing, testing, and maintainable software design.
 
-<!-- SCREENSHOT PLACEHOLDER
-Add a screenshot of the main CleanSheet interface here.
-
-Recommended path:
-assets/screenshots/main-interface.png
-
-Example:
-![CleanSheet Main Interface](assets/screenshots/main-interface.png)
--->
+<img width="1280" height="720" alt="overview" src="https://github.com/user-attachments/assets/e0f73da4-b946-4886-8428-b499893a55f1" />
 
 ---
 
 ## Demo
 
-<!-- VIDEO PLACEHOLDER
-Add the CleanSheet demo video here.
-
-On GitHub, you can replace this placeholder by dragging the demo video into the README editor.
--->
+https://github.com/user-attachments/assets/7b23fe4f-9e3e-4d27-baa2-d33e9a5a6e94
 
 The demo showcases the main CleanSheet workflow, including spreadsheet concatenation, data quality checking, and spreadsheet cleaning.
 
