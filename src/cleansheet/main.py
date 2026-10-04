@@ -9,8 +9,8 @@ from tkinterdnd2 import TkinterDnD
 from cleansheet.about.tab_about import build_about_tab
 from cleansheet.cleaner.tab_cleaner import build_cleaner_tab
 from cleansheet.concatenator.tab_concat import build_concatenator_tab
-from cleansheet.quality.tab_quality import build_quality_checker_tab
 from cleansheet.logging_config import setup_logging
+from cleansheet.quality.tab_quality import build_quality_checker_tab
 
 logger = logging.getLogger(__name__)
 

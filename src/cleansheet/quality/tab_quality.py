@@ -14,8 +14,8 @@ from openpyxl import load_workbook
 from PIL import Image, ImageTk
 from tkinterdnd2 import DND_FILES
 
-from cleansheet.quality.quality_checker import check_quality
 from cleansheet.paths import ASSETS_DIR
+from cleansheet.quality.quality_checker import check_quality
 
 logger = logging.getLogger(__name__)
 
@@ -613,7 +613,7 @@ def select_file(
 
         row_count = 0
 
-        with open(filepath, "r", encoding="utf-8", errors="ignore") as file:
+        with open(filepath, encoding="utf-8", errors="ignore") as file:
             if extension == ".csv":
                 reader = csv.reader(file)
                 row_count = sum(1 for _ in reader)
