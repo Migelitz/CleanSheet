@@ -100,9 +100,7 @@ text_drift
 As a result, the CSV test preserves the mixed-type behavior and reports:
 
 ```python
-{
-    "drift_test": np.dtype("int64")
-}
+{"drift_test": np.dtype("int64")}
 ```
 
 as the baseline dtype while separately detecting the type drift.
@@ -114,9 +112,7 @@ Pandas therefore sees the complete **drift_test** column at once and represents 
 The result is effectively:
 
 ```python
-{
-    "drift_test": pd.StringDtype(na_value=np.nan)
-}
+{"drift_test": pd.StringDtype(na_value=np.nan)}
 ```
 
 This causes the `test_schema_integrity` assertion to differ from the CSV expectation.

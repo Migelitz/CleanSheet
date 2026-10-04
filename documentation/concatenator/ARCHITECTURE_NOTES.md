@@ -407,7 +407,7 @@ Temporary-file handling should eventually use stronger cleanup guarantees, such 
 The project originally experimented with XlsxWriter's:
 
 ```python
-constant_memory=True
+constant_memory = True
 ```
 
 option for XLSX generation.
@@ -429,10 +429,7 @@ Because data correctness is more important than the memory optimization, the opt
 The current implementation therefore uses:
 
 ```python
-pd.ExcelWriter(
-    output_path,
-    engine="xlsxwriter"
-)
+pd.ExcelWriter(output_path, engine="xlsxwriter")
 ```
 
 without `constant_memory=True`.

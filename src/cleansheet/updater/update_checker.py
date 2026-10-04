@@ -8,6 +8,7 @@ logger = logging.getLogger(__name__)
 
 GITHUB_API_URL = "https://api.github.com/repos/Migelitz/CleanSheet/releases/latest"
 
+
 @dataclass(frozen=True)
 class UpdateInfo:
     current_version: str
@@ -23,7 +24,7 @@ def get_current_version() -> str:
     """Return the installed CleanSheet version."""
 
     try:
-        return f"v{version("CleanSheet")}"
+        return f"v{version('CleanSheet')}"
     except PackageNotFoundError:
         logger.exception("Could not determine CleanSheet package version")
         return "0.0.0"
@@ -79,7 +80,7 @@ def check_for_update() -> UpdateInfo | None:
         )
 
         return update_info
-    
+
     except requests.RequestException:
         logger.warning("Could not check for CleanSheet updates.", exc_info=True)
         return None

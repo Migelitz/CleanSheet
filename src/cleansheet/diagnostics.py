@@ -46,14 +46,12 @@ def create_diagnostic_archive() -> Path:
     log_directory.mkdir(parents=True, exist_ok=True)
     archive_path = _diagnostic_archive_path(log_directory)
 
-    log_paths = sorted(
-        path for path in log_directory.glob("cleansheet.log*") if path.is_file()
-    )
+    log_paths = sorted(path for path in log_directory.glob("cleansheet.log*") if path.is_file())
 
     try:
         with ZipFile(archive_path, "w", compression=ZIP_DEFLATED) as archive:
             archive.writestr("diagnostic-info.txt", _environment_info())
-            
+
             for path in log_paths:
                 archive.write(path, arcname=path.name)
 

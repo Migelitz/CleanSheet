@@ -55,12 +55,14 @@ import tkinter as tk
 
 _orig_substitute = tk.Misc._substitute
 
+
 def _patched_substitute(self, *args):
     # args[0] is typically the event serial number. If it is the broken string,
     # replace it with a dummy integer (0) before handing to Tkinter's type checks.
     if args and len(args) > 0 and args[0] == "%#":
         args = (0,) + args[1:]
     return _orig_substitute(self, *args)
+
 
 # Apply the patch globally to Tkinter
 tk.Misc._substitute = _patched_substitute

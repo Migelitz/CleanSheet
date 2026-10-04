@@ -79,12 +79,7 @@ def setup_logging() -> None:
     # ---------------------------------------------------------
 
     formatter = logging.Formatter(
-        fmt=(
-            "%(asctime)s | "
-            "%(levelname)-8s | "
-            "%(name)s | "
-            "%(message)s"
-        ),
+        fmt=("%(asctime)s | %(levelname)-8s | %(name)s | %(message)s"),
         datefmt="%Y-%m-%d %H:%M:%S",
     )
 
@@ -176,7 +171,3 @@ def shutdown_logging() -> None:
 
     _log_queue = None
     _initialized = False
-
-
-
-

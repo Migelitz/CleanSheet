@@ -19,7 +19,7 @@ def clean_dataframe(
     strip_chars: str,
     column_transformations: dict,
 ) -> pd.DataFrame:
-    
+
     logger.debug(
         "Starting DataFrame cleaning: rows=%s columns=%s trim_text=%s fill_missing=%s strip_chars=%s transformations=%s",
         len(df),
@@ -80,24 +80,26 @@ def clean_dataframe(
 
         elif transformation == "Extract Email":
             # Extracts the first valid email format found in the text
-            cleaned[col] = cleaned[col].astype("string").str.extract(r'([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})')[0]
+            cleaned[col] = (
+                cleaned[col].astype("string").str.extract(r"([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})")[0]
+            )
 
         elif transformation == "Extract URL":
             # Extracts the first valid web link found in the text
-            cleaned[col] = cleaned[col].astype("string").str.extract(r'(https?://\S+|www\.\S+)')[0]
+            cleaned[col] = cleaned[col].astype("string").str.extract(r"(https?://\S+|www\.\S+)")[0]
 
         elif transformation == "Anonymize Email":
             # Turns "john.doe@gmail.com" into "j***@gmail.com"
-            cleaned[col] = cleaned[col].astype("string").str.replace(r'(?<=.).(?=.*@)', '*', regex=True)
-            
+            cleaned[col] = cleaned[col].astype("string").str.replace(r"(?<=.).(?=.*@)", "*", regex=True)
+
         elif transformation == "Anonymize Numbers (Keep Last 4)":
             # Replaces all digits except the last 4 with asterisks (great for IDs/Credit Cards)
-            cleaned[col] = cleaned[col].astype("string").str.replace(r'\d(?=\d{4})', '*', regex=True)
+            cleaned[col] = cleaned[col].astype("string").str.replace(r"\d(?=\d{4})", "*", regex=True)
 
         elif transformation == "Split Human Names":
             # Parses names like "Dr. John W. Doe Jr." and creates two NEW columns next to it
             parsed_names = cleaned[col].astype("string").apply(lambda x: HumanName(x) if pd.notna(x) else None)
-            
+
             col_idx = cleaned.columns.get_loc(col)
             # Insert First and Last name columns immediately after the original column
             cleaned.insert(col_idx + 1, f"{col} - First", parsed_names.apply(lambda x: x.first if x else ""))
@@ -118,11 +120,8 @@ def clean_dataframe(
 
 
 def build_cleaner_tab(parent_frame: ttk.Frame) -> None:
-    
-    loaded_file = {
-        "path": "",
-        "columns": []
-    }
+
+    loaded_file = {"path": "", "columns": []}
 
     column_transformations = dict()
 
@@ -134,10 +133,7 @@ def build_cleaner_tab(parent_frame: ttk.Frame) -> None:
     top_bar.grid(row=0, column=0, sticky="ew")
 
     file_label = ttk.Label(
-        top_bar,
-        text="Drag & Drop a CSV or Excel file here",
-        padding=(10, 0),
-        font=("TkDefaultFont", 10, "bold")
+        top_bar, text="Drag & Drop a CSV or Excel file here", padding=(10, 0), font=("TkDefaultFont", 10, "bold")
     )
 
     def load_file(filepath: str | None = None) -> None:
@@ -147,8 +143,8 @@ def build_cleaner_tab(parent_frame: ttk.Frame) -> None:
                 filetypes=[
                     ("All Spreadsheets", "*.csv *.xlsx *.xls"),
                     ("CSV Files", "*.csv"),
-                    ("Excel Files", "*.xlsx *.xls")
-                ]
+                    ("Excel Files", "*.xlsx *.xls"),
+                ],
             )
 
         if not filepath:
@@ -168,7 +164,7 @@ def build_cleaner_tab(parent_frame: ttk.Frame) -> None:
             else:
                 messagebox.showwarning("Invalid File", "Please select a CSV or Excel file.")
                 return
-            
+
         except Exception:
             logger.exception("Failed to read cleaner file headers for %s", Path(filepath).name)
             messagebox.showerror("Error", "Failed to read file headers. Please check the file and try again.")
@@ -178,9 +174,7 @@ def build_cleaner_tab(parent_frame: ttk.Frame) -> None:
         loaded_file["path"] = filepath
         logger.info("Cleaner input file loaded: %s (%s columns)", Path(filepath).name, len(columns))
 
-        file_label.config(
-            text=f"Loaded: {Path(filepath).name} ({len(columns):,} columns)"
-        )
+        file_label.config(text=f"Loaded: {Path(filepath).name} ({len(columns):,} columns)")
         file_label.pack(side="left")
 
     def select_column_transformations() -> None:
@@ -194,9 +188,7 @@ def build_cleaner_tab(parent_frame: ttk.Frame) -> None:
         transformation_window.minsize(450, 300)
 
         ttk.Label(
-            transformation_window,
-            text="Select a transformation for each column:",
-            font=("TkDefaultFont", 10, "bold")
+            transformation_window, text="Select a transformation for each column:", font=("TkDefaultFont", 10, "bold")
         ).pack(anchor="w", padx=10, pady=10)
 
         columns_container = ttk.Frame(transformation_window)
@@ -234,11 +226,11 @@ def build_cleaner_tab(parent_frame: ttk.Frame) -> None:
 
         # ----- Mouse Wheel Scrolling -----
         def on_mousewheel(event):
-            if event.num == 4:          # Linux scroll up
+            if event.num == 4:  # Linux scroll up
                 canvas.yview_scroll(-1, "units")
-            elif event.num == 5:        # Linux scroll down
+            elif event.num == 5:  # Linux scroll down
                 canvas.yview_scroll(1, "units")
-            elif event.delta:           # Windows
+            elif event.delta:  # Windows
                 canvas.yview_scroll(int(-event.delta / 120), "units")
 
         def bind_mousewheel(event):
@@ -265,9 +257,7 @@ def build_cleaner_tab(parent_frame: ttk.Frame) -> None:
 
             ttk.Label(row, text=str(column), width=25).pack(side="left")
 
-            var = tk.StringVar(
-                value=column_transformations.get(column, "Keep Original")
-            )
+            var = tk.StringVar(value=column_transformations.get(column, "Keep Original"))
             transformation_vars[column] = var
 
             # Updated with new powerful formatting tools
@@ -289,7 +279,7 @@ def build_cleaner_tab(parent_frame: ttk.Frame) -> None:
                     "Split Human Names",
                 ],
                 state="readonly",
-                width=24
+                width=24,
             ).pack(side="right")
 
         def apply_transformations():
@@ -300,29 +290,19 @@ def build_cleaner_tab(parent_frame: ttk.Frame) -> None:
                 column_transformations[column] = var.get()
             transformation_window.destroy()
 
-        ttk.Button(
-            transformation_window, 
-            text="Apply", 
-            cursor="hand2",
-            command=apply_transformations
-        ).pack(pady=10)
+        ttk.Button(transformation_window, text="Apply", cursor="hand2", command=apply_transformations).pack(pady=10)
 
     def on_drop(event) -> None:
         file = parent_frame.tk.splitlist(event.data)
         if len(file) > 1:
             messagebox.showinfo(
                 "Multiple Files Detected",
-                f"Loading '{Path(file[0]).name}'. Multiple file batch cleaning is not supported on this tab."
+                f"Loading '{Path(file[0]).name}'. Multiple file batch cleaning is not supported on this tab.",
             )
         # Load the first file in the list if multiple files are dropped
         load_file(file[0])
 
-    select_btn = ttk.Button(
-        top_bar, 
-        text="Select File to Clean", 
-        cursor="hand2",
-        command=load_file
-    )
+    select_btn = ttk.Button(top_bar, text="Select File to Clean", cursor="hand2", command=load_file)
     select_btn.pack(side="left")
     file_label.pack(side="left", padx=(10, 0))
 
@@ -331,11 +311,7 @@ def build_cleaner_tab(parent_frame: ttk.Frame) -> None:
     parent_frame.dnd_bind("<<Drop>>", on_drop)
 
     # Options Frame
-    options_frame = ttk.LabelFrame(
-        parent_frame, 
-        text="Cleaning Transformations", 
-        padding=12
-    )
+    options_frame = ttk.LabelFrame(parent_frame, text="Cleaning Transformations", padding=12)
     options_frame.grid(row=1, column=0, sticky="nsew", padx=10, pady=(0, 10))
 
     var_dupes = tk.BooleanVar(value=True)
@@ -343,53 +319,40 @@ def build_cleaner_tab(parent_frame: ttk.Frame) -> None:
     var_missing = tk.StringVar(value="Keep Missing")
     var_strip = tk.StringVar(value="$, ₱, %")
 
+    ttk.Checkbutton(options_frame, text="Remove Duplicate Rows", variable=var_dupes, cursor="hand2").pack(
+        anchor="w", pady=4
+    )
+
     ttk.Checkbutton(
-        options_frame, 
-        text="Remove Duplicate Rows", 
-        variable=var_dupes,
-        cursor="hand2"
-    ).pack(anchor="w", pady=4)
-    
-    ttk.Checkbutton(
-        options_frame, 
-        text="Trim Whitespace from All Text Columns", 
-        variable=var_trim,
-        cursor="hand2"
+        options_frame, text="Trim Whitespace from All Text Columns", variable=var_trim, cursor="hand2"
     ).pack(anchor="w", pady=4)
 
     missing_row = ttk.Frame(options_frame)
     missing_row.pack(anchor="w", pady=6)
-    
-    ttk.Label(
-        missing_row, 
-        text="Handle Missing Values:",
-        font=("TkDefaultFont", 9, "bold")
-    ).pack(side="left", padx=(0, 6))
-    
+
+    ttk.Label(missing_row, text="Handle Missing Values:", font=("TkDefaultFont", 9, "bold")).pack(
+        side="left", padx=(0, 6)
+    )
+
     ttk.Combobox(
-        missing_row, 
-        textvariable=var_missing, 
-        values=["Keep Missing", "Drop Rows", "Fill 'N/A'"], 
+        missing_row,
+        textvariable=var_missing,
+        values=["Keep Missing", "Drop Rows", "Fill 'N/A'"],
         state="readonly",
-        cursor="hand2"
+        cursor="hand2",
     ).pack(side="left")
 
     strip_row = ttk.Frame(options_frame)
     strip_row.pack(anchor="w", pady=6)
-    
-    ttk.Label(
-        strip_row, 
-        text="Strip Characters (comma-separated):",
-        font=("TkDefaultFont", 9, "bold")
-    ).pack(side="left", padx=(0, 6))
-    
+
+    ttk.Label(strip_row, text="Strip Characters (comma-separated):", font=("TkDefaultFont", 9, "bold")).pack(
+        side="left", padx=(0, 6)
+    )
+
     ttk.Entry(strip_row, textvariable=var_strip, width=15).pack(side="left")
 
     ttk.Button(
-        options_frame, 
-        text="Select Column Transformations", 
-        cursor="hand2",
-        command=select_column_transformations
+        options_frame, text="Select Column Transformations", cursor="hand2", command=select_column_transformations
     ).pack(anchor="w", pady=12)
 
     # ==========================================
@@ -402,8 +365,7 @@ def build_cleaner_tab(parent_frame: ttk.Frame) -> None:
             return
 
         save_path = filedialog.asksaveasfilename(
-            defaultextension=".csv", 
-            filetypes=[("CSV", "*.csv"), ("Excel", "*.xlsx")]
+            defaultextension=".csv", filetypes=[("CSV", "*.csv"), ("Excel", "*.xlsx")]
         )
 
         if not save_path:
@@ -427,7 +389,7 @@ def build_cleaner_tab(parent_frame: ttk.Frame) -> None:
         # 2. Show a progress popup so the user knows it hasn't frozen
         progress_win = tk.Toplevel(parent_frame)
         progress_win.title("Exporting...")
-        
+
         # Center the progress window on the screen
         window_width, window_height = 300, 120
         screen_width = progress_win.winfo_screenwidth()
@@ -435,16 +397,14 @@ def build_cleaner_tab(parent_frame: ttk.Frame) -> None:
         x = (screen_width - window_width) // 2
         y = (screen_height - window_height) // 2
         progress_win.geometry(f"{window_width}x{window_height}+{x}+{y}")
-        
+
         progress_win.transient(parent_frame.winfo_toplevel())
         progress_win.grab_set()
 
-        ttk.Label(
-            progress_win, 
-            text="Processing data in the background...\nPlease wait.",
-            justify="center"
-        ).pack(pady=15)
-        
+        ttk.Label(progress_win, text="Processing data in the background...\nPlease wait.", justify="center").pack(
+            pady=15
+        )
+
         progress = ttk.Progressbar(progress_win, mode="indeterminate")
         progress.pack(fill="x", padx=20)
         progress.start()
@@ -457,48 +417,44 @@ def build_cleaner_tab(parent_frame: ttk.Frame) -> None:
                 extension = Path(file_path).suffix.lower()
                 save_is_csv = Path(save_path).suffix.lower() == ".csv"
                 is_csv = extension == ".csv"
-                
+
                 total_rows = 0
-                seen_hashes = set() # Global Hash Set for chunk deduplication
+                seen_hashes = set()  # Global Hash Set for chunk deduplication
 
                 if is_csv and save_is_csv:
                     # Optimized Chunking for CSV -> CSV
                     first_chunk = True
                     for chunk in pd.read_csv(file_path, chunksize=50000):
-                        
                         cleaned_chunk = clean_dataframe(
-                            df=chunk, 
-                            trim_text=trim_val, 
-                            fill_missing=missing_val, 
-                            strip_chars=strip_val, 
-                            column_transformations=transforms_copy
+                            df=chunk,
+                            trim_text=trim_val,
+                            fill_missing=missing_val,
+                            strip_chars=strip_val,
+                            column_transformations=transforms_copy,
                         )
 
                         # Global Deduplication Logic
                         if dupes_val:
                             cleaned_chunk = cleaned_chunk.drop_duplicates()
-                            
+
                             # Hash each row into a compact 64-bit unsigned integer.
                             # Makes it much faster to check for duplicates across chunks instead of comparing entire rows
                             # This lets us efficiently detect duplicates across chunks
                             # without storing/comparing entire rows.
                             row_hashes = pd.util.hash_pandas_object(cleaned_chunk, index=False)
-                            
+
                             # Keep rows whose hash isn't in our global set yet
                             # Tilde (~) operator inverts the boolean mask, so we keep rows that are NOT in seen_hashes
                             mask = ~row_hashes.isin(seen_hashes)
-                            cleaned_chunk = cleaned_chunk[mask] # This is boolean filtering, don't get confused
-                            
+                            cleaned_chunk = cleaned_chunk[mask]  # This is boolean filtering, don't get confused
+
                             # Update the global set for the next chunks
                             seen_hashes.update(row_hashes[mask])
 
                         total_rows += len(cleaned_chunk)
 
                         cleaned_chunk.to_csv(
-                            save_path, 
-                            mode='a' if not first_chunk else 'w', 
-                            header=first_chunk, 
-                            index=False
+                            save_path, mode="a" if not first_chunk else "w", header=first_chunk, index=False
                         )
                         first_chunk = False
                 else:
@@ -506,18 +462,18 @@ def build_cleaner_tab(parent_frame: ttk.Frame) -> None:
                     # Use Calamine engine for massive read speed upgrades
                     # NOTE: This will load the entire dataset into memory, so it may not be suitable for very large Excel files and saving to Excel. For large datasets, CSV is recommended.
                     df = pd.read_excel(file_path, engine="calamine") if not is_csv else pd.read_csv(file_path)
-                    
+
                     cleaned = clean_dataframe(
-                        df, 
-                        trim_text=trim_val, 
-                        fill_missing=missing_val, 
-                        strip_chars=strip_val, 
-                        column_transformations=transforms_copy
+                        df,
+                        trim_text=trim_val,
+                        fill_missing=missing_val,
+                        strip_chars=strip_val,
+                        column_transformations=transforms_copy,
                     )
 
                     if dupes_val:
                         cleaned = cleaned.drop_duplicates()
-                    
+
                     total_rows = len(cleaned)
 
                     if save_is_csv:
@@ -558,9 +514,6 @@ def build_cleaner_tab(parent_frame: ttk.Frame) -> None:
         thread = threading.Thread(target=process_data_thread, daemon=True)
         thread.start()
 
-    ttk.Button(
-        parent_frame, 
-        text="Apply Cleaning & Export File", 
-        cursor="hand2",
-        command=export_clean
-    ).grid(row=2, column=0, pady=10, ipady=4)
+    ttk.Button(parent_frame, text="Apply Cleaning & Export File", cursor="hand2", command=export_clean).grid(
+        row=2, column=0, pady=10, ipady=4
+    )

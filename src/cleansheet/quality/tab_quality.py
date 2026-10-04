@@ -22,20 +22,21 @@ logger = logging.getLogger(__name__)
 # ==============================================================================
 # BUG FIX: tkinterdnd2 Compatibility Patch for Python 3.12+
 # ==============================================================================
-# ISSUE: 
-# tkinterdnd2 relies on an older Tcl/Tk extension that fails to provide an 
-# event serial number for drag-and-drop events. Instead of a number, it passes 
-# the literal string "%#". Python 3.12+ strictly attempts to cast this string 
+# ISSUE:
+# tkinterdnd2 relies on an older Tcl/Tk extension that fails to provide an
+# event serial number for drag-and-drop events. Instead of a number, it passes
+# the literal string "%#". Python 3.12+ strictly attempts to cast this string
 # to an integer (in `tkinter.__init__.py`), resulting in a fatal TclError.
 #
 # SOLUTION:
-# We apply a monkey patch to Tkinter's internal event argument substitution 
-# method (`tk.Misc._substitute`). We intercept the raw arguments, and if we 
-# detect the broken "%#" string, we replace it with a dummy integer (0) before 
+# We apply a monkey patch to Tkinter's internal event argument substitution
+# method (`tk.Misc._substitute`). We intercept the raw arguments, and if we
+# detect the broken "%#" string, we replace it with a dummy integer (0) before
 # passing it up to Tkinter's strict type-checkers. This prevents the crash.
 # ==============================================================================
 
 _orig_substitute = tk.Misc._substitute
+
 
 def _patched_substitute(self, *args):
     # args[0] is typically the event serial number. If it is the broken string,
@@ -44,10 +45,12 @@ def _patched_substitute(self, *args):
         args = (0,) + args[1:]
     return _orig_substitute(self, *args)
 
+
 # Apply the patch globally to Tkinter
 tk.Misc._substitute = _patched_substitute
 
 # ==============================================================================
+
 
 def show_data(df: pd.DataFrame, filepath: str) -> None:
 
@@ -58,96 +61,45 @@ def show_data(df: pd.DataFrame, filepath: str) -> None:
     # ----- Top information -----
 
     info_frame = ttk.Frame(parent_frame)
-    info_frame.pack(
-        fill="x",
-        padx=10,
-        pady=10
-    )
+    info_frame.pack(fill="x", padx=10, pady=10)
 
     filename = Path(filepath).name
 
-    file_label = ttk.Label(
-        info_frame,
-        text=f"File: {filename}",
-        font=("TkDefaultFont", 12, "bold")
-    )
+    file_label = ttk.Label(info_frame, text=f"File: {filename}", font=("TkDefaultFont", 12, "bold"))
     file_label.pack(side="left")
 
     # ----- Table frame -----
 
     table_frame = ttk.Frame(parent_frame)
-    table_frame.pack(
-        fill="both",
-        expand=True,
-        padx=10,
-        pady=(0, 10)
-    )
+    table_frame.pack(fill="both", expand=True, padx=10, pady=(0, 10))
 
-    tree = ttk.Treeview(
-        table_frame,
-        columns=list(df.columns),
-        show="headings"
-    )
+    tree = ttk.Treeview(table_frame, columns=list(df.columns), show="headings")
 
-    vertical_scrollbar = ttk.Scrollbar(
-        table_frame,
-        orient="vertical",
-        command=tree.yview
-    )
+    vertical_scrollbar = ttk.Scrollbar(table_frame, orient="vertical", command=tree.yview)
 
-    horizontal_scrollbar = ttk.Scrollbar(
-        table_frame,
-        orient="horizontal",
-        command=tree.xview
-    )
+    horizontal_scrollbar = ttk.Scrollbar(table_frame, orient="horizontal", command=tree.xview)
 
-    tree.configure(
-        yscrollcommand=vertical_scrollbar.set,
-        xscrollcommand=horizontal_scrollbar.set
-    )
+    tree.configure(yscrollcommand=vertical_scrollbar.set, xscrollcommand=horizontal_scrollbar.set)
 
     # ----- Columns -----
 
     for column in df.columns:
-        tree.heading(
-            column,
-            text=column
-        )
+        tree.heading(column, text=column)
 
-        tree.column(
-            column,
-            width=140,
-            anchor="w"
-        )
+        tree.column(column, width=140, anchor="w")
 
     # ----- Populate table -----
 
     for row in df.itertuples(index=False, name=None):
-        tree.insert(
-            "",
-            "end",
-            values=row
-        )
+        tree.insert("", "end", values=row)
 
     # ----- Layout -----
 
-    tree.grid(
-        row=0,
-        column=0,
-        sticky="nsew"
-    )
+    tree.grid(row=0, column=0, sticky="nsew")
 
-    vertical_scrollbar.grid(
-        row=0,
-        column=1,
-        sticky="ns"
-    )
+    vertical_scrollbar.grid(row=0, column=1, sticky="ns")
 
-    horizontal_scrollbar.grid(
-        row=1,
-        column=0,
-        sticky="ew"
-    )
+    horizontal_scrollbar.grid(row=1, column=0, sticky="ew")
 
     table_frame.rowconfigure(0, weight=1)
     table_frame.columnconfigure(0, weight=1)
@@ -157,10 +109,7 @@ def show_data(df: pd.DataFrame, filepath: str) -> None:
     def open_quality_report() -> None:
 
         logger.info("Opening quality report for %s", Path(filepath).name)
-        quality_button.config(
-            text="Processing... Please wait",
-            state=tk.DISABLED
-        )
+        quality_button.config(text="Processing... Please wait", state=tk.DISABLED)
 
         # Progress bar
         progress_win = tk.Toplevel(parent_frame)
@@ -178,12 +127,8 @@ def show_data(df: pd.DataFrame, filepath: str) -> None:
         progress_win.transient(parent_frame.winfo_toplevel())
         progress_win.grab_set()
 
-        ttk.Label(
-            progress_win, 
-            text="Generating quality report...\nPlease wait.",
-            justify="center"
-        ).pack(pady=15)
-        
+        ttk.Label(progress_win, text="Generating quality report...\nPlease wait.", justify="center").pack(pady=15)
+
         progress = ttk.Progressbar(progress_win, mode="indeterminate")
         progress.pack(fill="x", padx=20)
         progress.start()
@@ -195,8 +140,8 @@ def show_data(df: pd.DataFrame, filepath: str) -> None:
                 # Fetch the quality report
                 report = check_quality(filepath=Path(filepath))
 
-                # IMPORTANT: Tkinter is NOT thread-safe. You cannot update the UI 
-                # from a background thread. We use .after(0, ...) to push the 
+                # IMPORTANT: Tkinter is NOT thread-safe. You cannot update the UI
+                # from a background thread. We use .after(0, ...) to push the
                 # report back to the Main Thread so it can safely draw the new window.
                 duration = time.perf_counter() - started_at
                 logger.info(
@@ -221,38 +166,24 @@ def show_data(df: pd.DataFrame, filepath: str) -> None:
 
             # Display the quality report in a new window
             show_quality_report(report)
-            quality_button.config(
-                text="Check Data Quality",
-                state=tk.NORMAL
-            )
+            quality_button.config(text="Check Data Quality", state=tk.NORMAL)
 
         def on_error(error: str) -> None:
             progress.stop()  # Stop the progress bar
             progress_win.grab_release()  # Release the grab on the progress window
             progress_win.destroy()  # Close the progress window
 
-            messagebox.showerror(
-                "Processing Error", 
-                f"An error occurred while generating the report:\n\n{error}"
-            )
-            quality_button.config(
-                text="Check Data Quality", 
-                state=tk.NORMAL
-            )
+            messagebox.showerror("Processing Error", f"An error occurred while generating the report:\n\n{error}")
+            quality_button.config(text="Check Data Quality", state=tk.NORMAL)
 
         # Start the background thread
         # daemon=True ensures the thread dies if the user closes the app
         threading.Thread(target=run_background_task, daemon=True).start()
 
-    quality_button = ttk.Button(
-        parent_frame,
-        text="Check Data Quality",
-        command=open_quality_report
-    )
+    quality_button = ttk.Button(parent_frame, text="Check Data Quality", command=open_quality_report)
 
-    quality_button.pack(
-        pady=(0, 10)
-    )
+    quality_button.pack(pady=(0, 10))
+
 
 def show_quality_report(report: dict) -> None:
 
@@ -265,22 +196,12 @@ def show_quality_report(report: dict) -> None:
     # ========================================================
 
     overview_frame = ttk.Frame(parent_frame)
-    overview_frame.pack(
-        fill="x",
-        padx=10,
-        pady=10
-    )
+    overview_frame.pack(fill="x", padx=10, pady=10)
 
     overview_label = ttk.Label(
-        overview_frame,
-        text="DATA QUALITY OVERVIEW",
-        font=("TkDefaultFont", 14, "bold"),
-        anchor="center"
+        overview_frame, text="DATA QUALITY OVERVIEW", font=("TkDefaultFont", 14, "bold"), anchor="center"
     )
-    overview_label.pack(
-        fill="x",
-        pady=(0, 10)
-    )
+    overview_label.pack(fill="x", pady=(0, 10))
 
     # ----- Metric cards container -----
 
@@ -295,68 +216,33 @@ def show_quality_report(report: dict) -> None:
     # ----- Helper function for metric cards -----
 
     def create_card(parent, title, value, column):
-        card = ttk.Frame(
-            parent,
-            relief="solid",
-            borderwidth=1
-        )
+        card = ttk.Frame(parent, relief="solid", borderwidth=1)
 
-        card.grid(
-            row=0,
-            column=column,
-            padx=5,
-            sticky="nsew"
-        )
+        card.grid(row=0, column=column, padx=5, sticky="nsew")
 
-        ttk.Label(
-            card,
-            text=title,
-            font=("TkDefaultFont", 9, "bold")
-        ).pack(pady=(10, 2))
+        ttk.Label(card, text=title, font=("TkDefaultFont", 9, "bold")).pack(pady=(10, 2))
 
-        ttk.Label(
-            card,
-            text=value,
-            font=("TkDefaultFont", 16, "bold")
-        ).pack(pady=(2, 10))
+        ttk.Label(card, text=value, font=("TkDefaultFont", 16, "bold")).pack(pady=(2, 10))
 
     # ----- Values -----
 
-    create_card(
-        cards_frame,
-        "ROWS",
-        f"{report['rows']:,}",
-        0
-    )
+    create_card(cards_frame, "ROWS", f"{report['rows']:,}", 0)
 
-    create_card(
-        cards_frame,
-        "COLUMNS",
-        f"{report['columns']:,}",
-        1
-    )
+    create_card(cards_frame, "COLUMNS", f"{report['columns']:,}", 1)
 
     # ========================================================
     # NOTEBOOK
     # ========================================================
 
     notebook = ttk.Notebook(parent_frame)
-    notebook.pack(
-        fill="both",
-        expand=True,
-        padx=10,
-        pady=(0, 10)
-    )
+    notebook.pack(fill="both", expand=True, padx=10, pady=(0, 10))
 
     # ========================================================
     # COLUMNS TAB
     # ========================================================
 
     columns_tab = ttk.Frame(notebook)
-    notebook.add(
-        columns_tab,
-        text="Columns"
-    )
+    notebook.add(columns_tab, text="Columns")
 
     columns_tree = ttk.Treeview(
         columns_tab,
@@ -370,7 +256,7 @@ def show_quality_report(report: dict) -> None:
             "missing_percentage",
             "sentinels",
         ),
-        show="headings"
+        show="headings",
     )
 
     columns_tree.heading("column", text="Column")
@@ -391,40 +277,17 @@ def show_quality_report(report: dict) -> None:
     columns_tree.column("missing_percentage", width=110, anchor="center")
     columns_tree.column("sentinels", width=120, anchor="center")
 
-    col_h_scroll = ttk.Scrollbar(
-        columns_tab,
-        orient="horizontal",
-        command=columns_tree.xview
-    )
+    col_h_scroll = ttk.Scrollbar(columns_tab, orient="horizontal", command=columns_tree.xview)
 
-    col_v_scroll = ttk.Scrollbar(
-        columns_tab,
-        orient="vertical",
-        command=columns_tree.yview
-    )
+    col_v_scroll = ttk.Scrollbar(columns_tab, orient="vertical", command=columns_tree.yview)
 
-    columns_tree.configure(
-        xscrollcommand=col_h_scroll.set,
-        yscrollcommand=col_v_scroll.set
-    )
+    columns_tree.configure(xscrollcommand=col_h_scroll.set, yscrollcommand=col_v_scroll.set)
 
-    columns_tree.grid(
-        row=0,
-        column=0,
-        sticky="nsew"
-    )
+    columns_tree.grid(row=0, column=0, sticky="nsew")
 
-    col_h_scroll.grid(
-        row=1,
-        column=0,
-        sticky="ew"
-    )
+    col_h_scroll.grid(row=1, column=0, sticky="ew")
 
-    col_v_scroll.grid(
-        row=0,
-        column=1,
-        sticky="ns"
-    )
+    col_v_scroll.grid(row=0, column=1, sticky="ns")
 
     columns_tab.rowconfigure(0, weight=1)
     columns_tab.columnconfigure(0, weight=1)
@@ -432,7 +295,6 @@ def show_quality_report(report: dict) -> None:
     # ----- Populate columns table -----
 
     for column in report["column_names"]:
-
         # Get the type drift status for the column; default to "No" if not present.
         # If type_drift is empty, it means no drift was detected for that column. If it has a value, it indicates a drift was found.
         has_drift = "Yes" if report.get("type_drifts", {}).get(column) else "No"
@@ -448,8 +310,8 @@ def show_quality_report(report: dict) -> None:
                 f"{report['non_null_percentage'].get(column, 0):.2f}%",
                 f"{report['null_counts'].get(column, 0):,}",
                 f"{report['null_percentage'].get(column, 0):.2f}%",
-                f"{report['sentinel_counts'].get(column, 0):,}"
-            )
+                f"{report['sentinel_counts'].get(column, 0):,}",
+            ),
         )
 
     # ========================================================
@@ -457,16 +319,12 @@ def show_quality_report(report: dict) -> None:
     # ========================================================
 
     statistics_tab = ttk.Frame(notebook)
-    notebook.add(
-        statistics_tab,
-        text="Statistics"
-    )
+    notebook.add(statistics_tab, text="Statistics")
 
     # Only show columns that actually have calculated stats (Numeric columns only)
     numeric_columns = list(report["numeric_counts"].keys())
 
     if numeric_columns:
-
         statistic_columns = [
             "column",
             "count",
@@ -479,14 +337,10 @@ def show_quality_report(report: dict) -> None:
             "min",
             "max",
             "zeros",
-            "negatives"
+            "negatives",
         ]
 
-        statistics_tree = ttk.Treeview(
-            statistics_tab,
-            columns=statistic_columns,
-            show="headings"
-        )
+        statistics_tree = ttk.Treeview(statistics_tab, columns=statistic_columns, show="headings")
 
         for col in statistic_columns:
             statistics_tree.heading(col, text=col.capitalize())
@@ -494,22 +348,11 @@ def show_quality_report(report: dict) -> None:
 
         statistics_tree.column("column", width=180, anchor="w")
 
-        stat_v_scroll = ttk.Scrollbar(
-            statistics_tab,
-            orient="vertical",
-            command=statistics_tree.yview
-        )
+        stat_v_scroll = ttk.Scrollbar(statistics_tab, orient="vertical", command=statistics_tree.yview)
 
-        stat_h_scroll = ttk.Scrollbar(
-            statistics_tab,
-            orient="horizontal",
-            command=statistics_tree.xview
-        )
+        stat_h_scroll = ttk.Scrollbar(statistics_tab, orient="horizontal", command=statistics_tree.xview)
 
-        statistics_tree.configure(
-            yscrollcommand=stat_v_scroll.set,
-            xscrollcommand=stat_h_scroll.set
-        )
+        statistics_tree.configure(yscrollcommand=stat_v_scroll.set, xscrollcommand=stat_h_scroll.set)
 
         statistics_tree.grid(row=0, column=0, sticky="nsew")
         stat_v_scroll.grid(row=0, column=1, sticky="ns")
@@ -521,14 +364,13 @@ def show_quality_report(report: dict) -> None:
         # ----- Populate statistics -----
 
         for col in numeric_columns:
-            
             mean_val = report["global_mean"].get(col)
             sum_val = report["running_sum"].get(col)
             var_sample_val = report["sample_variance"].get(col)
             std_sample_val = report["sample_std"].get(col)
             var_population_val = report["population_variance"].get(col)
             std_population_val = report["population_std"].get(col)
-            
+
             statistics_tree.insert(
                 "",
                 "end",
@@ -544,17 +386,12 @@ def show_quality_report(report: dict) -> None:
                     f"{report['global_min'].get(col, 'N/A')}",
                     f"{report['global_max'].get(col, 'N/A')}",
                     f"{report['zero_counts'].get(col, 0):,}",
-                    f"{report['negative_counts'].get(col, 0):,}"
-                )
+                    f"{report['negative_counts'].get(col, 0):,}",
+                ),
             )
 
     else:
-
-        ttk.Label(
-            statistics_tab,
-            text="No numerical columns available.",
-            font=("TkDefaultFont", 11)
-        ).pack(pady=30)
+        ttk.Label(statistics_tab, text="No numerical columns available.", font=("TkDefaultFont", 11)).pack(pady=30)
 
     # ========================================================
     # COVARIANCE TAB (New Pairwise Tab)
@@ -564,18 +401,10 @@ def show_quality_report(report: dict) -> None:
     notebook.add(cov_tab, text="Covariances")
 
     cov_data = report.get("sample_covariance", {})
-    
+
     if cov_data:
         cov_tree = ttk.Treeview(
-            cov_tab, 
-            columns=(
-                "col_x", 
-                "col_y", 
-                "sample_cov", 
-                "pop_cov",
-                "pearson"
-            ), 
-            show="headings"
+            cov_tab, columns=("col_x", "col_y", "sample_cov", "pop_cov", "pearson"), show="headings"
         )
 
         cov_tree.heading("col_x", text="Column X")
@@ -587,47 +416,38 @@ def show_quality_report(report: dict) -> None:
         for col in ("col_x", "col_y", "sample_cov", "pop_cov", "pearson"):
             cov_tree.column(col, width=150, anchor="center")
 
-        cov_v_scroll = ttk.Scrollbar(
-            cov_tab, 
-            orient="vertical", 
-            command=cov_tree.yview
-            )
+        cov_v_scroll = ttk.Scrollbar(cov_tab, orient="vertical", command=cov_tree.yview)
         cov_tree.configure(yscrollcommand=cov_v_scroll.set)
 
-        cov_tree.pack(
-            side="left", 
-            fill="both", 
-            expand=True
-        )
+        cov_tree.pack(side="left", fill="both", expand=True)
         cov_v_scroll.pack(side="right", fill="y")
 
         for (col_x, col_y), s_cov in cov_data.items():
             p_cov = report.get("population_covariance", {}).get((col_x, col_y))
             pearson = report.get("pearson_correlation", {}).get((col_x, col_y))
-            
-            cov_tree.insert("", "end", values=(
-                col_x,
-                col_y,
-                f"{s_cov:,.4f}" if s_cov is not None else "N/A",
-                f"{p_cov:,.4f}" if p_cov is not None else "N/A",
-                f"{pearson:,.4f}" if pearson is not None else "N/A"
-            ))
+
+            cov_tree.insert(
+                "",
+                "end",
+                values=(
+                    col_x,
+                    col_y,
+                    f"{s_cov:,.4f}" if s_cov is not None else "N/A",
+                    f"{p_cov:,.4f}" if p_cov is not None else "N/A",
+                    f"{pearson:,.4f}" if pearson is not None else "N/A",
+                ),
+            )
     else:
-        ttk.Label(
-            cov_tab, 
-            text="Not enough numeric columns to generate pairs.", 
-            font=("TkDefaultFont", 11)
-        ).pack(pady=30)
+        ttk.Label(cov_tab, text="Not enough numeric columns to generate pairs.", font=("TkDefaultFont", 11)).pack(
+            pady=30
+        )
 
     # ========================================================
     # UNIQUE VALUES TAB (Master-Detail)
     # ========================================================
 
     unique_tab = ttk.Frame(notebook)
-    notebook.add(
-        unique_tab,
-        text="Unique Values"
-    )
+    notebook.add(unique_tab, text="Unique Values")
 
     # The PanedWindow allows the user to drag the divider left or right
     paned_window = ttk.PanedWindow(unique_tab, orient="horizontal")
@@ -635,71 +455,34 @@ def show_quality_report(report: dict) -> None:
 
     # --- LEFT PANE (Master - Column List) ---
     master_frame = ttk.Frame(paned_window)
-    paned_window.add(master_frame, weight=1) # Weight 1 gives it less space initially
+    paned_window.add(master_frame, weight=1)  # Weight 1 gives it less space initially
 
-    ttk.Label(
-        master_frame, 
-        text="Columns", 
-        font=("TkDefaultFont", 10, "bold")
-    ).pack(anchor="w", pady=(0, 5))
+    ttk.Label(master_frame, text="Columns", font=("TkDefaultFont", 10, "bold")).pack(anchor="w", pady=(0, 5))
 
     # exportselection=False prevents the selection from clearing when clicking elsewhere
-    columns_listbox = tk.Listbox(
-        master_frame, 
-        exportselection=False, 
-        font=("TkDefaultFont", 10)
-    )
-    master_scroll = ttk.Scrollbar(
-        master_frame, 
-        orient="vertical", 
-        command=columns_listbox.yview
-    )
-    
+    columns_listbox = tk.Listbox(master_frame, exportselection=False, font=("TkDefaultFont", 10))
+    master_scroll = ttk.Scrollbar(master_frame, orient="vertical", command=columns_listbox.yview)
+
     columns_listbox.configure(yscrollcommand=master_scroll.set)
-    columns_listbox.pack(
-        side="left", 
-        fill="both", 
-        expand=True
-    )
-    master_scroll.pack(
-        side="right", 
-        fill="y"
-    )
+    columns_listbox.pack(side="left", fill="both", expand=True)
+    master_scroll.pack(side="right", fill="y")
 
     # --- RIGHT PANE (Detail - Unique Values List) ---
     detail_frame = ttk.Frame(paned_window)
-    paned_window.add(detail_frame, weight=2) # Weight 2 makes it twice as wide initially
+    paned_window.add(detail_frame, weight=2)  # Weight 2 makes it twice as wide initially
 
-    detail_label = ttk.Label(
-        detail_frame, 
-        text="Select a column to view values", 
-        font=("TkDefaultFont", 10, "bold")
-    )
+    detail_label = ttk.Label(detail_frame, text="Select a column to view values", font=("TkDefaultFont", 10, "bold"))
     detail_label.pack(anchor="w", pady=(0, 5))
 
-    values_listbox = tk.Listbox(
-        detail_frame, 
-        font=("TkDefaultFont", 10)
-    )
-    detail_scroll = ttk.Scrollbar(
-        detail_frame, 
-        orient="vertical", 
-        command=values_listbox.yview
-    )
-    
+    values_listbox = tk.Listbox(detail_frame, font=("TkDefaultFont", 10))
+    detail_scroll = ttk.Scrollbar(detail_frame, orient="vertical", command=values_listbox.yview)
+
     values_listbox.configure(yscrollcommand=detail_scroll.set)
-    values_listbox.pack(
-        side="left", 
-        fill="both", 
-        expand=True
-    )
-    detail_scroll.pack(
-        side="right", 
-        fill="y"
-    )
+    values_listbox.pack(side="left", fill="both", expand=True)
+    detail_scroll.pack(side="right", fill="y")
 
     # --- WIRING IT TOGETHER ---
-    
+
     unique_data = report.get("unique_values", {})
 
     # Populate the master listbox
@@ -710,14 +493,14 @@ def show_quality_report(report: dict) -> None:
         selection = columns_listbox.curselection()
         if not selection:
             return
-        
+
         # Get the selected column name
         selected_col = columns_listbox.get(selection[0])
         values = unique_data.get(selected_col, set())
-        
+
         # Update the detail label to show count
         detail_label.config(text=f"Unique values for '{selected_col}' ({len(values)} total)")
-        
+
         # Clear the old values from the right pane
         values_listbox.delete(0, tk.END)
 
@@ -736,7 +519,7 @@ def show_quality_report(report: dict) -> None:
 
     # Bind the click event on the left listbox to the function above
     columns_listbox.bind("<<ListboxSelect>>", on_column_select)
-    
+
     # Automatically select the first column so the right pane isn't empty on load
     if unique_data:
         columns_listbox.selection_set(0)
@@ -747,11 +530,7 @@ def show_quality_report(report: dict) -> None:
     # ========================================================
 
     additional_frame = ttk.Frame(parent_frame)
-    additional_frame.pack(
-        fill="x",
-        padx=10,
-        pady=(0, 10)
-    )
+    additional_frame.pack(fill="x", padx=10, pady=(0, 10))
 
     empty_count = len(report.get("empty_columns", []))
     drift_count = len(report.get("type_drifts", {}))
@@ -763,14 +542,10 @@ def show_quality_report(report: dict) -> None:
             f"100% Empty columns: {empty_count}    |    "
             f"Columns with Type Drifts: {drift_count}    |    "
             f"Duplicate count: {duplicate_count}"
-        )
+        ),
     ).pack(side="left")
 
-    ttk.Button(
-        additional_frame,
-        text="Close",
-        command=parent_frame.destroy
-    ).pack(side="right")
+    ttk.Button(additional_frame, text="Close", command=parent_frame.destroy).pack(side="right")
 
 
 def select_file(
@@ -785,7 +560,7 @@ def select_file(
             filetypes=[
                 ("All Spreadsheets", "*.csv *.xlsx *.xls"),
                 ("CSV Files", "*.csv"),
-                ("Excel Files", "*.xlsx *.xls")
+                ("Excel Files", "*.xlsx *.xls"),
             ]
         )
 
@@ -841,19 +616,19 @@ def select_file(
         with open(filepath, "r", encoding="utf-8", errors="ignore") as file:
             if extension == ".csv":
                 reader = csv.reader(file)
-                row_count = sum(1 for _ in reader) 
+                row_count = sum(1 for _ in reader)
 
             elif extension == ".xlsx":
                 wb = load_workbook(filepath, read_only=True)
                 ws = wb.active
 
-                row_count = sum(1 for _ in ws.iter_rows(min_row=2)) 
+                row_count = sum(1 for _ in ws.iter_rows(min_row=2))
 
             elif extension == ".xls":
                 wb = xlrd.open_workbook(filepath)
                 ws = wb.sheet_by_index(0)
 
-                row_count = sum(1 for _ in ws.get_rows()) - 1 
+                row_count = sum(1 for _ in ws.get_rows()) - 1
 
             else:
                 raise ValueError(f"Unsupported format: {extension}")
@@ -867,15 +642,12 @@ def select_file(
             match extension:
                 case ".csv":
                     if view_method == "head":
-                        df = pd.read_csv(filepath, nrows=row_size + 1) # To accomodate header row for +1
+                        df = pd.read_csv(filepath, nrows=row_size + 1)  # To accomodate header row for +1
 
                     elif view_method == "tail":
                         total_rows = count_rows_in_file(filepath)
 
-                        df = pd.read_csv(
-                            filepath,
-                            skiprows=lambda x: x != 0 and x < total_rows - row_size
-                        )
+                        df = pd.read_csv(filepath, skiprows=lambda x: x != 0 and x < total_rows - row_size)
 
                     elif view_method == "random":
                         total_rows = count_rows_in_file(filepath)
@@ -883,30 +655,19 @@ def select_file(
                         if total_rows <= row_size:
                             df = pd.read_csv(filepath)
                         else:
-                            random_indices = sorted(
-                                random.sample(range(1, total_rows + 1), row_size)
-                            )
+                            random_indices = sorted(random.sample(range(1, total_rows + 1), row_size))
 
-                            df = pd.read_csv(
-                                filepath,
-                                skiprows=lambda x: x != 0 and x not in random_indices
-                            )
+                            df = pd.read_csv(filepath, skiprows=lambda x: x != 0 and x not in random_indices)
 
                 case ".xlsx" | ".xls":
                     if view_method == "head":
-                        df = pd.read_excel(
-                            filepath,
-                            engine="calamine",
-                            nrows=row_size + 1
-                        )
+                        df = pd.read_excel(filepath, engine="calamine", nrows=row_size + 1)
 
                     elif view_method == "tail":
                         total_rows = count_rows_in_file(filepath)
 
                         df = pd.read_excel(
-                            filepath,
-                            engine="calamine",
-                            skiprows=lambda x: x != 0 and x < total_rows - row_size
+                            filepath, engine="calamine", skiprows=lambda x: x != 0 and x < total_rows - row_size
                         )
 
                     elif view_method == "random":
@@ -915,14 +676,10 @@ def select_file(
                         if total_rows <= row_size:
                             df = pd.read_excel(filepath, engine="calamine")
                         else:
-                            random_indices = sorted(
-                                random.sample(range(1, total_rows + 1), row_size)
-                            )
+                            random_indices = sorted(random.sample(range(1, total_rows + 1), row_size))
 
                             df = pd.read_excel(
-                                filepath,
-                                engine="calamine",
-                                skiprows=lambda x: x != 0 and x not in random_indices
+                                filepath, engine="calamine", skiprows=lambda x: x != 0 and x not in random_indices
                             )
 
                 case _:
@@ -957,12 +714,7 @@ def build_quality_checker_tab(parent_frame: ttk.Frame) -> None:
     # Options container
     # ========================================================
     options_container = ttk.Frame(parent_frame)
-    options_container.pack(
-        fill="both",
-        expand=True,
-        padx=10,
-        pady=10
-    )
+    options_container.pack(fill="both", expand=True, padx=10, pady=10)
 
     options_container.columnconfigure(0, weight=1)
     options_container.rowconfigure(0, weight=1)
@@ -994,12 +746,7 @@ def build_quality_checker_tab(parent_frame: ttk.Frame) -> None:
 
     validate_cmd = (parent_frame.register(validate_number_input), "%P")
 
-    rows_entry = ttk.Entry(
-        rows_frame,
-        width=20,
-        validate="key",
-        validatecommand=validate_cmd
-    )
+    rows_entry = ttk.Entry(rows_frame, width=20, validate="key", validatecommand=validate_cmd)
     rows_entry.insert(0, "500")
     rows_entry.pack(side="left")
 
@@ -1012,13 +759,13 @@ def build_quality_checker_tab(parent_frame: ttk.Frame) -> None:
             "Row Input Information",
             "This input determines how many rows of the spreadsheet will be displayed in the preview table.\n\n"
             "Recommended: 500 rows\n\n"
-            "You can increase this number if your system can handle it, but be cautious as very large numbers may slow down the application."
-        )
+            "You can increase this number if your system can handle it, but be cautious as very large numbers may slow down the application.",
+        ),
     )
     row_tooltip.pack(
         side="left",
         padx=(5, 0),
-    )   
+    )
 
     # ========================================================
     # Display Options
@@ -1055,13 +802,10 @@ def build_quality_checker_tab(parent_frame: ttk.Frame) -> None:
             "These options determine which rows of the spreadsheet will be displayed in the preview table.\n\n"
             "Show Head: Displays the first N rows of the spreadsheet.\n\n"
             "Show Tail: Displays the last N rows of the spreadsheet.\n\n"
-            "Show Random: Displays N random rows from the spreadsheet."
-        )
+            "Show Random: Displays N random rows from the spreadsheet.",
+        ),
     )
-    display_options_tooltip.pack(
-        padx=(6, 0),
-        side="left"
-    )
+    display_options_tooltip.pack(padx=(6, 0), side="left")
 
     table_display_var = tk.StringVar(value="head")
 
@@ -1072,11 +816,7 @@ def build_quality_checker_tab(parent_frame: ttk.Frame) -> None:
     )
 
     show_head_button = ttk.Radiobutton(
-        radio_frame,
-        text="Show Head",
-        value="head",
-        variable=table_display_var,
-        cursor="hand2"
+        radio_frame, text="Show Head", value="head", variable=table_display_var, cursor="hand2"
     )
     show_head_button.pack(
         side="left",
@@ -1084,11 +824,7 @@ def build_quality_checker_tab(parent_frame: ttk.Frame) -> None:
     )
 
     show_tail_button = ttk.Radiobutton(
-        radio_frame,
-        text="Show Tail",
-        value="tail",
-        variable=table_display_var,
-        cursor="hand2"
+        radio_frame, text="Show Tail", value="tail", variable=table_display_var, cursor="hand2"
     )
     show_tail_button.pack(
         side="left",
@@ -1096,11 +832,7 @@ def build_quality_checker_tab(parent_frame: ttk.Frame) -> None:
     )
 
     show_random_button = ttk.Radiobutton(
-        radio_frame,
-        text="Show Random",
-        value="random",
-        variable=table_display_var,
-        cursor="hand2"
+        radio_frame, text="Show Random", value="random", variable=table_display_var, cursor="hand2"
     )
     show_random_button.pack(
         side="left",
@@ -1111,12 +843,7 @@ def build_quality_checker_tab(parent_frame: ttk.Frame) -> None:
     # File selection container
     # ========================================================
     file_select_container = ttk.Frame(parent_frame)
-    file_select_container.pack(
-        fill="both",
-        expand=True,
-        padx=10,
-        pady=(0, 10)
-    )
+    file_select_container.pack(fill="both", expand=True, padx=10, pady=(0, 10))
 
     canvas = tk.Canvas(
         file_select_container,
@@ -1129,7 +856,10 @@ def build_quality_checker_tab(parent_frame: ttk.Frame) -> None:
     )
 
     rectangle = canvas.create_rectangle(
-        2, 2, 2, 2, 
+        2,
+        2,
+        2,
+        2,
         outline="gray",
         width=2,
         dash=(8, 5),
@@ -1142,24 +872,26 @@ def build_quality_checker_tab(parent_frame: ttk.Frame) -> None:
     canvas.upload_icon = upload_icon
 
     upload_image_id = canvas.create_image(
-        0, 0,
+        0,
+        0,
         image=upload_icon,
     )
 
     upload_text_id = canvas.create_text(
-        0, 0,
+        0,
+        0,
         text="Click to select a file",
         font=("TkDefaultFont", 14, "bold"),
         fill="black",
     )
 
     upload_subtext_id = canvas.create_text(
-        0, 0,
+        0,
+        0,
         text="or drag and drop it here",
         font=("TkDefaultFont", 11),
         fill="gray",
     )
-
 
     def resize_drop_zone(event):
         width = event.width
@@ -1167,27 +899,18 @@ def build_quality_checker_tab(parent_frame: ttk.Frame) -> None:
 
         canvas.coords(
             rectangle,
-            2, 2, width - 2, height - 2,
+            2,
+            2,
+            width - 2,
+            height - 2,
         )
 
         center_x = width / 2
         center_y = height / 2
 
-        canvas.coords(
-            upload_image_id,
-            center_x,
-            center_y - 40   
-        )
-        canvas.coords(
-            upload_text_id,
-            center_x, 
-            center_y + 20
-        )
-        canvas.coords(
-            upload_subtext_id,
-            center_x, 
-            center_y + 45
-        )
+        canvas.coords(upload_image_id, center_x, center_y - 40)
+        canvas.coords(upload_text_id, center_x, center_y + 20)
+        canvas.coords(upload_subtext_id, center_x, center_y + 45)
 
     canvas.bind("<Configure>", resize_drop_zone)
 
@@ -1195,14 +918,11 @@ def build_quality_checker_tab(parent_frame: ttk.Frame) -> None:
         row_input = rows_entry.get().strip()
         if not row_input:
             logger.warning("Missing row input while selecting quality preview file")
-            messagebox.showerror(
-                "Missing Information", 
-                "Row entry cannot be empty. Please enter a valid number."
-            )
-            return  
-        
+            messagebox.showerror("Missing Information", "Row entry cannot be empty. Please enter a valid number.")
+            return
+
         select_file(
-            int(row_input), 
+            int(row_input),
             table_display_var.get(),
             parent_frame=parent_frame,
         )
@@ -1211,20 +931,15 @@ def build_quality_checker_tab(parent_frame: ttk.Frame) -> None:
         row_input = rows_entry.get().strip()
         if not row_input:
             logger.warning("Missing row input while dropping quality preview file")
-            messagebox.showerror(
-                "Missing Information", 
-                "Row entry cannot be empty. Please enter a valid number."
-            )
-            return  
-        
+            messagebox.showerror("Missing Information", "Row entry cannot be empty. Please enter a valid number.")
+            return
+
         filepaths = canvas.tk.splitlist(event.data)
 
         if len(filepaths) > 1:
             messagebox.showinfo(
                 "File Dropped",
-                f"You dropped multiple files.\n\n"
-                f"Only the first file will be processed:\n\n"
-                f"{filepaths[0]}"
+                f"You dropped multiple files.\n\nOnly the first file will be processed:\n\n{filepaths[0]}",
             )
 
         filepath = filepaths[0]
