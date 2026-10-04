@@ -21,6 +21,7 @@ def test_trim_text_and_strip_characters() -> None:
 
     assert result["name"].tolist() == ["Alice", "Bob"]
 
+
 @pytest.mark.parametrize(
     ("transformation", "values", "expected"),
     [
@@ -36,9 +37,7 @@ def test_trim_text_and_strip_characters() -> None:
         ("Date (YYYY-MM-DD)", ["January 2, 2024", "not a date"], ["2024-01-02", float("nan")]),
     ],
 )
-def test_column_transformations(
-    transformation: str, values: list[str], expected: list[object]
-) -> None:
+def test_column_transformations(transformation: str, values: list[str], expected: list[object]) -> None:
     result = clean_dataframe(
         pd.DataFrame({"value": values}),
         trim_text=False,
@@ -116,6 +115,7 @@ def test_generated_spreadsheet_fixtures_are_readable(filename: str) -> None:
     assert result["name"].tolist() == ["Alice", "Bob"]
     assert result["email"].tolist() == ["alice@example.com", "bob@example.com"]
 
+
 FIXTURE_DIR = Path(__file__).parent.parent / "assets" / "test_files"
 
 
@@ -124,7 +124,7 @@ def test_benchmark_converts_csv_to_xlsx(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
 
     # Use run_benchmark from cleaner_benchmark.py since clean_dataframe
-    # only cleans and not save 
+    # only cleans and not save
     run_benchmark(FIXTURE_DIR / "cleaner_test.csv", "xlsx", "test")
 
     output = tmp_path / "tests" / "benchmark_cleaned.xlsx"
@@ -145,12 +145,13 @@ def test_benchmark_converts_csv_to_xlsx(tmp_path: Path, monkeypatch) -> None:
     assert result["email"].tolist() == ["alice@example.com", "bob@example.com"]
     assert result["amount"].tolist() == [200.00, 20]
 
+
 def test_benchmark_converts_xlsx_to_csv(tmp_path: Path, monkeypatch) -> None:
     (tmp_path / "tests").mkdir()
     monkeypatch.chdir(tmp_path)
 
     # Use run_benchmark from cleaner_benchmark.py since clean_dataframe
-    # only cleans and not save 
+    # only cleans and not save
     run_benchmark(FIXTURE_DIR / "cleaner_test.xlsx", "csv", "test")
 
     output = tmp_path / "tests" / "benchmark_cleaned.csv"

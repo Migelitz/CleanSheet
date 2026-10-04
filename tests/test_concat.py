@@ -6,16 +6,11 @@ from cleansheet.concatenator.tab_concat import concat_files
 
 
 def test_concat_csv_and_csv_to_csv(tmp_path: Path) -> None:
-    source_path = (
-        Path(__file__).parent.parent
-        / "assets"
-        / "test_files"
-        / "quality_test.csv"
-    )
+    source_path = Path(__file__).parent.parent / "assets" / "test_files" / "quality_test.csv"
     output_path = tmp_path / "merged.csv"
 
     concat_files(
-        files=[str(source_path), str(source_path)], 
+        files=[str(source_path), str(source_path)],
         output_folder=str(tmp_path),
         output_filename=output_path.name,
         chunksize=5,
@@ -30,18 +25,14 @@ def test_concat_csv_and_csv_to_csv(tmp_path: Path) -> None:
     )
 
     pd.testing.assert_frame_equal(result, expected)
-    
+
+
 def test_concat_xlsx_and_xlsx_to_xlsx(tmp_path: Path) -> None:
-    source_path = (
-        Path(__file__).parent.parent
-        / "assets"
-        / "test_files"
-        / "quality_test.xlsx"
-    )
+    source_path = Path(__file__).parent.parent / "assets" / "test_files" / "quality_test.xlsx"
     output_path = tmp_path / "merged.xlsx"
 
     concat_files(
-        files=[str(source_path), str(source_path)], 
+        files=[str(source_path), str(source_path)],
         output_folder=str(tmp_path),
         output_filename=output_path.name,
         chunksize=5,
@@ -73,20 +64,14 @@ def test_concat_xlsx_and_xlsx_to_xlsx(tmp_path: Path) -> None:
         expected_normalized,
         check_dtype=False,
     )
-
 
 
 def test_concat_csv_and_csv_to_xlsx(tmp_path: Path) -> None:
-    source_path = (
-        Path(__file__).parent.parent
-        / "assets"
-        / "test_files"
-        / "quality_test.csv"
-    )
+    source_path = Path(__file__).parent.parent / "assets" / "test_files" / "quality_test.csv"
     output_path = tmp_path / "merged.xlsx"
 
     concat_files(
-        files=[str(source_path), str(source_path)], 
+        files=[str(source_path), str(source_path)],
         output_folder=str(tmp_path),
         output_filename=output_path.name,
         chunksize=5,
@@ -119,17 +104,13 @@ def test_concat_csv_and_csv_to_xlsx(tmp_path: Path) -> None:
         check_dtype=False,
     )
 
+
 def test_concat_xlsx_and_xlsx_to_csv(tmp_path: Path) -> None:
-    source_path = (
-        Path(__file__).parent.parent
-        / "assets"
-        / "test_files"
-        / "quality_test.xlsx"
-    )
+    source_path = Path(__file__).parent.parent / "assets" / "test_files" / "quality_test.xlsx"
     output_path = tmp_path / "merged.csv"
 
     concat_files(
-        files=[str(source_path), str(source_path)], 
+        files=[str(source_path), str(source_path)],
         output_folder=str(tmp_path),
         output_filename=output_path.name,
         chunksize=5,
@@ -145,17 +126,14 @@ def test_concat_xlsx_and_xlsx_to_csv(tmp_path: Path) -> None:
 
     pd.testing.assert_frame_equal(result, expected)
 
+
 def test_concat_csv_and_xlsx_to_csv(tmp_path: Path) -> None:
-    csv_source_path = (
-        Path(__file__).parent.parent / "assets" / "test_files" / "quality_test.csv"
-    )
-    excel_source_path = (
-        Path(__file__).parent.parent / "assets" / "test_files" / "quality_test.xlsx"
-    )
+    csv_source_path = Path(__file__).parent.parent / "assets" / "test_files" / "quality_test.csv"
+    excel_source_path = Path(__file__).parent.parent / "assets" / "test_files" / "quality_test.xlsx"
     output_path = tmp_path / "merged.csv"
 
     concat_files(
-        files=[str(csv_source_path), str(excel_source_path)], 
+        files=[str(csv_source_path), str(excel_source_path)],
         output_folder=str(tmp_path),
         output_filename=output_path.name,
         chunksize=5,
@@ -172,17 +150,14 @@ def test_concat_csv_and_xlsx_to_csv(tmp_path: Path) -> None:
 
     pd.testing.assert_frame_equal(result, expected)
 
+
 def test_concat_csv_and_xlsx_to_xlsx(tmp_path: Path) -> None:
-    csv_source_path = (
-        Path(__file__).parent.parent / "assets" / "test_files" / "quality_test.csv"
-    )
-    excel_source_path = (
-        Path(__file__).parent.parent / "assets" / "test_files" / "quality_test.xlsx"
-    )
+    csv_source_path = Path(__file__).parent.parent / "assets" / "test_files" / "quality_test.csv"
+    excel_source_path = Path(__file__).parent.parent / "assets" / "test_files" / "quality_test.xlsx"
     output_path = tmp_path / "merged.xlsx"
 
     concat_files(
-        files=[str(csv_source_path), str(excel_source_path)], 
+        files=[str(csv_source_path), str(excel_source_path)],
         output_folder=str(tmp_path),
         output_filename=output_path.name,
         chunksize=5,
@@ -216,6 +191,7 @@ def test_concat_csv_and_xlsx_to_xlsx(tmp_path: Path) -> None:
         check_dtype=False,
     )
 
+
 # Runs too long due to huge files but may uncomment to test
 # BUT I HAVEN'T NORMALIZE THEM! SO THEY ARE EXPECTED TO FAIL JUST LIKE ABOVE
 # REMEMBER THE FAIL OF TEST IS DOCUMENTED! Please see the documentation for concatenator TEST_RESULT.md
@@ -230,7 +206,7 @@ def test_concat_csv_and_xlsx_to_xlsx(tmp_path: Path) -> None:
 #     output_path = tmp_path / "merged.xlsx"
 
 #     concat_files(
-#         files=[str(csv_source_path), str(excel_source_path)], 
+#         files=[str(csv_source_path), str(excel_source_path)],
 #         output_folder=str(tmp_path),
 #         output_filename=output_path.name,
 #         chunksize=50_000,
@@ -274,7 +250,7 @@ def test_concat_csv_and_xlsx_to_xlsx(tmp_path: Path) -> None:
 #     output_path = tmp_path / "merged.csv"
 
 #     concat_files(
-#         files=[str(csv_source_path), str(excel_source_path)], 
+#         files=[str(csv_source_path), str(excel_source_path)],
 #         output_folder=str(tmp_path),
 #         output_filename=output_path.name,
 #         chunksize=50_000,
@@ -318,7 +294,7 @@ def test_concat_csv_and_xlsx_to_xlsx(tmp_path: Path) -> None:
 #     output_path = tmp_path / "merged.csv"
 
 #     concat_files(
-#         files=[str(csv_source_path), str(excel_source_path)], 
+#         files=[str(csv_source_path), str(excel_source_path)],
 #         output_folder=str(tmp_path),
 #         output_filename=output_path.name,
 #         chunksize=1_000_000,
@@ -349,7 +325,7 @@ def test_concat_csv_and_xlsx_to_xlsx(tmp_path: Path) -> None:
 #     output_path = tmp_path / "merged.xlsx"
 
 #     concat_files(
-#         files=[str(csv_source_path), str(excel_source_path)], 
+#         files=[str(csv_source_path), str(excel_source_path)],
 #         output_folder=str(tmp_path),
 #         output_filename=output_path.name,
 #         chunksize=1_000_000,
@@ -365,4 +341,3 @@ def test_concat_csv_and_xlsx_to_xlsx(tmp_path: Path) -> None:
 #     )
 
 #     pd.testing.assert_frame_equal(result, expected, check_dtype=False)
-

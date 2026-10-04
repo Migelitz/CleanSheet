@@ -25,6 +25,7 @@ or statistical quality calculations.
 # CSV file path for testing
 BASE_DIR = Path(__file__).parent.parent
 
+
 @pytest.fixture(
     params=[
         "quality_test.csv",
@@ -37,18 +38,13 @@ def report(request: FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> dict[str
     filepath = BASE_DIR / "assets" / "test_files" / request.param
     return check_quality(filepath)
 
+
 def test_dataset_geometry(report: dict[str, Any]) -> None:
     assert report["rows"] == 10
     assert report["columns"] == 6
-    assert report["column_names"] == [
-        "num_a", 
-        "num_b", 
-        "category", 
-        "sentinels", 
-        "all_empty", 
-        "drift_test"
-    ]
+    assert report["column_names"] == ["num_a", "num_b", "category", "sentinels", "all_empty", "drift_test"]
     assert report["empty_columns"] == ["all_empty"]
+
 
 @pytest.mark.parametrize(
     "filename, expected_drifts",
@@ -58,12 +54,8 @@ def test_dataset_geometry(report: dict[str, Any]) -> None:
         ("quality_test.xls", {}),
     ],
 )
-def test_schema_integrity(
-    filename: str, 
-    expected_drifts: dict[str, bool], 
-    monkeypatch: pytest.MonkeyPatch
-) -> None:
-    
+def test_schema_integrity(filename: str, expected_drifts: dict[str, bool], monkeypatch: pytest.MonkeyPatch) -> None:
+
     monkeypatch.setattr("cleansheet.quality.quality_checker.chunk_size", 5)
     filepath = BASE_DIR / "assets" / "test_files" / filename
     report = check_quality(filepath)
@@ -76,17 +68,18 @@ def test_schema_integrity(
         "all_empty",
         "drift_test",
     }
-    
+
     assert report["type_drifts"] == expected_drifts
+
 
 def test_missingness(report: dict[str, Any]) -> None:
     assert report["null_counts"] == {
-        "num_a": 0, 
-        "num_b": 1, 
-        "category": 0, 
-        "sentinels": 0, 
-        "all_empty": 10, 
-        "drift_test": 0
+        "num_a": 0,
+        "num_b": 1,
+        "category": 0,
+        "sentinels": 0,
+        "all_empty": 10,
+        "drift_test": 0,
     }
     assert report["null_percentage"] == {
         "num_a": 0.0,
@@ -111,7 +104,8 @@ def test_missingness(report: dict[str, Any]) -> None:
         "sentinels": 100.0,
         "all_empty": 0.0,
         "drift_test": 100.0,
-    } 
+    }
+
 
 def test_sentinel_detection(report: dict[str, Any]) -> None:
     assert report["sentinel_counts"] == {
@@ -123,6 +117,7 @@ def test_sentinel_detection(report: dict[str, Any]) -> None:
         "drift_test": 0,
     }
 
+
 def test_numeric_health(report: dict[str, Any]) -> None:
     assert report["global_min"] == {
         "num_a": -15,
@@ -132,7 +127,7 @@ def test_numeric_health(report: dict[str, Any]) -> None:
         "num_a": 30,
         "num_b": 60.0,
     }
-    
+
     assert report["zero_counts"] == {
         "num_a": 2,
         "num_b": 2,
@@ -142,8 +137,10 @@ def test_numeric_health(report: dict[str, Any]) -> None:
         "num_b": 1,
     }
 
+
 def test_duplicates(report: dict[str, Any]) -> None:
     assert report["duplicate_counts"] == 1
+
 
 def test_central_tendency(report: dict[str, Any]) -> None:
     assert report["running_sum"]["num_a"] == 75.0
@@ -152,6 +149,7 @@ def test_central_tendency(report: dict[str, Any]) -> None:
     assert report["running_sum"]["num_b"] == 180.0
     assert report["numeric_counts"]["num_b"] == 9
     assert report["global_mean"]["num_b"] == 20.0
+
 
 def test_dispersion(report: dict[str, Any]) -> None:
     assert report["population_variance"]["num_a"] == pytest.approx(
@@ -202,6 +200,7 @@ def test_dispersion(report: dict[str, Any]) -> None:
         abs=1e-9,
     )
 
+
 def test_covariance(report: dict[str, Any]) -> None:
     assert report["sample_covariance"][("num_a", "num_b")] == pytest.approx(
         268.75,
@@ -215,18 +214,13 @@ def test_covariance(report: dict[str, Any]) -> None:
         abs=1e-9,
     )
 
+
 def test_categorical_cardinality(report: dict[str, Any]) -> None:
-    assert report["unique_values"]["num_a"] == {
-        10, -5, 0, 15, 25, -15, 30, 5
-    }
+    assert report["unique_values"]["num_a"] == {10, -5, 0, 15, 25, -15, 30, 5}
 
-    assert report["unique_values"]["num_b"] == {
-        20.0, 0.0, -10.0, 30.0, 50.0, 60.0, 10.0
-    }
+    assert report["unique_values"]["num_b"] == {20.0, 0.0, -10.0, 30.0, 50.0, 60.0, 10.0}
 
-    assert report["unique_values"]["category"] == {
-        "Alpha", "Beta", "Gamma"
-    }
+    assert report["unique_values"]["category"] == {"Alpha", "Beta", "Gamma"}
 
     assert report["unique_values"]["sentinels"] == {
         "?",
@@ -257,23 +251,22 @@ def test_categorical_cardinality(report: dict[str, Any]) -> None:
         "text_drift",
     }
 
+
 def _quality_report(
     frame: pd.DataFrame,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     chunk_size: int = 2,
 ) -> dict[str, Any]:
-    
+
     monkeypatch.setattr("cleansheet.quality.quality_checker.chunk_size", chunk_size)
     filepath = tmp_path / "quality_regression.csv"
     frame.to_csv(filepath, index=False)
     return check_quality(filepath)
 
 
-def test_drifted_column_removes_pairwise_statistics(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    
+def test_drifted_column_removes_pairwise_statistics(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+
     frame = pd.DataFrame(
         {
             "drifted": [1, 2, "text", 4],
@@ -289,10 +282,8 @@ def test_drifted_column_removes_pairwise_statistics(
     assert report["pearson_correlation"] == {}
 
 
-def test_pearson_uses_pairwise_aligned_variance(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    
+def test_pearson_uses_pairwise_aligned_variance(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+
     frame = pd.DataFrame(
         {
             "a": [10, 20, 30, np.nan],
@@ -307,10 +298,8 @@ def test_pearson_uses_pairwise_aligned_variance(
     assert report["pearson_correlation"][pair] == pytest.approx(1.0)
 
 
-def test_pearson_is_one_for_complete_linearly_related_pairs(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    
+def test_pearson_is_one_for_complete_linearly_related_pairs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+
     frame = pd.DataFrame({"a": [1, 2, 3], "b": [2, 4, 6]})
 
     report = _quality_report(frame, tmp_path, monkeypatch)
@@ -318,10 +307,8 @@ def test_pearson_is_one_for_complete_linearly_related_pairs(
     assert report["pearson_correlation"][("a", "b")] == pytest.approx(1.0)
 
 
-def test_pearson_is_none_with_fewer_than_two_pairs(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    
+def test_pearson_is_none_with_fewer_than_two_pairs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+
     frame = pd.DataFrame({"a": [1, np.nan], "b": [2, 3]})
 
     report = _quality_report(frame, tmp_path, monkeypatch)
@@ -331,10 +318,8 @@ def test_pearson_is_none_with_fewer_than_two_pairs(
     assert report["pearson_correlation"][pair] is None
 
 
-def test_pearson_is_none_for_zero_variance_pair(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    
+def test_pearson_is_none_for_zero_variance_pair(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+
     frame = pd.DataFrame({"a": [1, 1, 1], "b": [2, 3, 4]})
 
     report = _quality_report(frame, tmp_path, monkeypatch)

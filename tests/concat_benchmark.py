@@ -15,6 +15,7 @@ from src.cleansheet.quality.quality_checker import check_quality
 # load all env
 load_dotenv()
 
+
 class SystemResourceMonitor:
     """Monitors OS-level process RAM and CPU in the background at fixed intervals."""
 
@@ -68,7 +69,7 @@ def run_benchmark(files: list[str], chunksize: int, output_extension: str) -> No
             return
 
         input_size_mb.append(Path(file).stat().st_size / (1024 * 1024))
-        
+
     print("=" * 60)
 
     for i in range(len(files)):
@@ -80,7 +81,7 @@ def run_benchmark(files: list[str], chunksize: int, output_extension: str) -> No
 
     print("=" * 60)
 
-    output_path = Path("tests").absolute() / f"benchmark_merged.{output_extension}" 
+    output_path = Path("tests").absolute() / f"benchmark_merged.{output_extension}"
 
     # 1. Prepare Monitors
     monitor = SystemResourceMonitor(interval_sec=0.05)
@@ -91,11 +92,8 @@ def run_benchmark(files: list[str], chunksize: int, output_extension: str) -> No
     t_start = time.perf_counter()
 
     concat_files(
-        files=files, 
-        output_folder=str(output_path.parent),
-        output_filename=output_path.name,
-        chunksize=chunksize
-        )
+        files=files, output_folder=str(output_path.parent), output_filename=output_path.name, chunksize=chunksize
+    )
 
     t_end = time.perf_counter()
     monitor.stop()
@@ -166,12 +164,12 @@ if __name__ == "__main__":
     # python -m tests.concat_benchmark (file location of the dataset e.g. assets/test_files/quality_test.xlsx) (file location again)... (extension name) (number of run here) (chunksize)
     # add as many files you want to concatenate
     # -3 to take account of the run and chunksize in len(sys.argv)
-    target_file = sys.argv[1:len(sys.argv) - 3] if len(sys.argv) - 3 > 1 else sys.exit(1)
-    output_ext =sys.argv[-3] if len(sys.argv) - 3 > 1 else sys.exit(1)
+    target_file = sys.argv[1 : len(sys.argv) - 3] if len(sys.argv) - 3 > 1 else sys.exit(1)
+    output_ext = sys.argv[-3] if len(sys.argv) - 3 > 1 else sys.exit(1)
     run = int(sys.argv[-2]) if len(sys.argv) - 3 > 1 else sys.exit(1)
     chunksize = int(sys.argv[-1]) if len(sys.argv) - 3 > 1 else sys.exit(1)
 
-    for i in range(run):
+    for _ in range(run):
         run_benchmark(target_file, chunksize, output_ext)
 
     # IF active in laptop
@@ -203,10 +201,7 @@ if __name__ == "__main__":
                 "Priority": "urgent",
                 "Tags": "rotating_light,alarm_clock",
             },
-            timeout=10
+            timeout=10,
         )
 
-    send_alarm(
-        title="Benchmark Complete!",
-        message="You may look at the results now."
-    )
+    send_alarm(title="Benchmark Complete!", message="You may look at the results now.")
