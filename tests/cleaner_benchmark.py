@@ -16,6 +16,7 @@ from cleansheet.quality.quality_checker import check_quality
 # load all env
 load_dotenv()
 
+
 class SystemResourceMonitor:
     """Monitors OS-level process RAM and CPU in the background at fixed intervals."""
 
@@ -58,8 +59,10 @@ class SystemResourceMonitor:
         if self._monitor_thread:
             self._monitor_thread.join()
 
+
 class UnsupportedFileOutput(ValueError):
     """Raise an error if output_extension that is not csv or xlsx"""
+
 
 def run_benchmark(file: Path, output_extension: str, caller: str) -> None:
 
@@ -67,14 +70,14 @@ def run_benchmark(file: Path, output_extension: str, caller: str) -> None:
         raise UnsupportedFileOutput(f"{output_extension} is not supported. Please use csv or xlsx as output")
 
     input_size_mb = Path(file).stat().st_size / (1024 * 1024)
-        
+
     print("=" * 60)
     print(f"INPUT: {Path(file.name)}")
     print(f"File Size:    {input_size_mb:.2f} MB")
     print("=" * 60)
 
     output_path = Path("tests").absolute() / f"benchmark_cleaned.{output_extension}"
-    
+
     if output_path.exists():
         output_path.unlink()
 
@@ -101,11 +104,7 @@ def run_benchmark(file: Path, output_extension: str, caller: str) -> None:
         trim_val = True
         missing_val = "Keep Missing"
         strip_val = "%"
-        transforms_copy = {
-            "name": "Split Human Names",
-            "email": "Extract Email",
-            "amount": "Clean Currency"
-        }
+        transforms_copy = {"name": "Split Human Names", "email": "Extract Email", "amount": "Clean Currency"}
         remove_duplicates = False
 
     # 1. Prepare Monitors
@@ -126,7 +125,6 @@ def run_benchmark(file: Path, output_extension: str, caller: str) -> None:
     if is_csv and save_is_csv:
         first_chunk = True
         for chunk in pd.read_csv(file, chunksize=50_000):
-
             cleaned_chunk = clean_dataframe(
                 df=chunk,
                 trim_text=trim_val,
@@ -289,10 +287,7 @@ if __name__ == "__main__":
                 "Priority": "urgent",
                 "Tags": "rotating_light,alarm_clock",
             },
-            timeout=10
+            timeout=10,
         )
 
-    send_alarm(
-        title="Benchmark Complete!",
-        message="You may look at the results now."
-    )
+    send_alarm(title="Benchmark Complete!", message="You may look at the results now.")
