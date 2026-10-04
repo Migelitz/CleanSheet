@@ -10,8 +10,8 @@ import pygame
 import requests
 from dotenv import load_dotenv
 
-from src.cleansheet.cleaner.tab_cleaner import clean_dataframe
-from src.cleansheet.quality.quality_checker import check_quality
+from cleansheet.cleaner.tab_cleaner import clean_dataframe
+from cleansheet.quality.quality_checker import check_quality
 
 # load all env
 load_dotenv()
