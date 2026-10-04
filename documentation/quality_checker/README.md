@@ -33,6 +33,7 @@ The Quality Checker produces a data-quality report containing several categories
 
 - Baseline data types detected from the first CSV chunk or the loaded Excel dataset.
 - Type-drift detection when a column is interpreted with different data types across CSV chunks.
+- Numeric statistics and pairwise statistics involving a drifted column are excluded.
 
 ### Missing Data
 
@@ -90,6 +91,8 @@ For numeric column pairs, the engine calculates:
 - Pearson correlation.
 
 Only rows where both variables contain valid numeric observations contribute to pairwise calculations.
+Pearson correlation uses variance and standard deviation calculated from those same pairwise-valid rows, rather than from each column independently.
+The Quality Report displays sample covariance, population covariance, and Pearson correlation together in the Covariances tab.
 
 ### Categorical Cardinality
 
@@ -239,6 +242,8 @@ Large Excel workbooks can therefore consume substantially more memory than simil
 ### Statistical Numerical Stability
 
 Variance and covariance currently use algebraic shortcut formulas based on accumulated sums and squared/cross-product sums.
+
+Pairwise covariance and Pearson correlation use only rows where both columns contain valid numeric observations. Pearson correlation uses pair-specific squared-sum accumulators so its standard deviations are aligned with the covariance observations.
 
 These formulas are efficient and convenient for a single-pass implementation but can suffer from floating-point cancellation on datasets containing extremely large values with relatively small variance.
 

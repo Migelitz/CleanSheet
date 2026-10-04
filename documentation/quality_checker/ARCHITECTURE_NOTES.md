@@ -260,9 +260,9 @@ For every pair, the engine maintains joint accumulators for:
 - $\\sum y$.
 - $\\sum xy$.
 
-These values are later used to calculate sample covariance and population covariance.
+These values are later used to calculate sample covariance and population covariance. The engine also accumulates squared values for both members of each pair.
 
-Pearson correlation is then derived from sample covariance and the corresponding sample standard deviations.
+Pearson correlation is derived from the pairwise covariance and pair-specific sample standard deviations. This keeps covariance and correlation aligned to the same rows where both columns contain valid numeric observations, even when their missing-value patterns differ.
 
 ### Rationale
 
@@ -523,6 +523,8 @@ The first processed chunk establishes the baseline Pandas dtype for each column.
 Subsequent chunks are compared against that baseline.
 
 If a column's inferred dtype differs from the baseline, the corresponding column is flagged as having type drift.
+
+When drift is detected, the column's univariate numeric statistics are removed from the final report. Every pairwise statistic whose tuple contains that column is removed as well, so stale covariance or correlation results cannot remain for a column whose numeric interpretation changed between chunks.
 
 Conceptually:
 

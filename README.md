@@ -91,6 +91,7 @@ Example:
 * Inspect numerical ranges and statistics.
 * Detect duplicate rows.
 * Calculate covariance and Pearson correlation for numerical columns.
+* Display sample covariance, population covariance, and Pearson correlation in the Quality Report's Covariances tab.
 * Inspect categorical values and cardinality.
 * Process CSV files using chunks.
 * Analyze Excel files through the same quality-checking pipeline.

@@ -55,6 +55,7 @@ The test suite currently verifies:
 - Sample standard deviation.
 - Population covariance.
 - Sample covariance.
+- Pearson correlation, including pairwise missingness and zero-variance cases.
 - Unique-value/cardinality detection.
 
 ## Results
@@ -181,6 +182,10 @@ The only accepted format-dependent differences are the representation of the int
 
 - baseline_dtypes
 - unique_values
+
+When a chunk-level type drift is detected, the numeric statistics for that column are removed. Pairwise covariance and Pearson correlation entries involving that column are also removed.
+
+Pairwise covariance and Pearson correlation use the same rows where both columns contain valid numeric observations. Pearson correlation therefore uses pairwise-aligned variance and standard deviation calculations, including returning `None` when fewer than two paired observations exist or either paired variable has zero variance.
 
 ## Why This Tradeoff Is Accepted
 
