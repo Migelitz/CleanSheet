@@ -572,7 +572,8 @@ def show_quality_report(report: dict) -> None:
                 "col_x", 
                 "col_y", 
                 "sample_cov", 
-                "pop_cov"
+                "pop_cov",
+                "pearson"
             ), 
             show="headings"
         )
@@ -581,8 +582,9 @@ def show_quality_report(report: dict) -> None:
         cov_tree.heading("col_y", text="Column Y")
         cov_tree.heading("sample_cov", text="Sample Covariance")
         cov_tree.heading("pop_cov", text="Population Covariance")
+        cov_tree.heading("pearson", text="Pearson Correlation")
 
-        for col in ("col_x", "col_y", "sample_cov", "pop_cov"):
+        for col in ("col_x", "col_y", "sample_cov", "pop_cov", "pearson"):
             cov_tree.column(col, width=150, anchor="center")
 
         cov_v_scroll = ttk.Scrollbar(
@@ -601,12 +603,14 @@ def show_quality_report(report: dict) -> None:
 
         for (col_x, col_y), s_cov in cov_data.items():
             p_cov = report.get("population_covariance", {}).get((col_x, col_y))
+            pearson = report.get("pearson_correlation", {}).get((col_x, col_y))
             
             cov_tree.insert("", "end", values=(
                 col_x,
                 col_y,
                 f"{s_cov:,.4f}" if s_cov is not None else "N/A",
-                f"{p_cov:,.4f}" if p_cov is not None else "N/A"
+                f"{p_cov:,.4f}" if p_cov is not None else "N/A",
+                f"{pearson:,.4f}" if pearson is not None else "N/A"
             ))
     else:
         ttk.Label(
