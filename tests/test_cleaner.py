@@ -4,8 +4,8 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from src.cleansheet.cleaner.tab_cleaner import clean_dataframe
-from tests.cleaner_benchmark import run_benchmark
+from cleansheet.cleaner.tab_cleaner import clean_dataframe
+from cleaner_benchmark import run_benchmark
 
 
 def test_trim_text_and_strip_characters() -> None:
