@@ -1,0 +1,98 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version (example: v1.1.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: "Build ${{ matrix.artifact_name }}"
+    runs-on: "${{ matrix.os }}"
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            flags: >-
+              --windows-console-mode=disable
+              --windows-icon-from-ico=assets/icons/cleansheet_logo.ico
+            artifact_name: CleanSheet-Windows
+            output_name: CleanSheet.exe
+          - os: ubuntu-latest
+            flags: "--linux-app-icon=assets/icons/cleansheet_logo.png"
+            artifact_name: CleanSheet-Linux
+            output_name: CleanSheet
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y patchelf
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      - name: Compile Application
+        shell: bash
+        run: |
+          uv run python -m nuitka \
+            --onefile \
+            --enable-plugin=tk-inter \
+            --include-data-dir=assets=assets \
+            --assume-yes-for-downloads \
+            --output-filename="${{ matrix.output_name }}" \
+            ${{ matrix.flags }} \
+            src/cleansheet/main.py
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: "${{ matrix.artifact_name }}"
+          path: "${{ matrix.output_name }}"
+
+  release:
+    name: Create Draft Release
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: CleanSheet-Windows
+          path: release
+
+      - name: Download Linux artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: CleanSheet-Linux
+          path: release
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: "${{ github.token }}"
+        run: |
+          gh release create "${{ inputs.version }}" \
+            release/CleanSheet.exe \
+            release/CleanSheet \
+            --title "CleanSheet ${{ inputs.version }}" \
+            --generate-notes\
+            --draft
