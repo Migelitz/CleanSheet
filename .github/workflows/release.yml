@@ -50,17 +50,31 @@ jobs:
       - name: Install dependencies
         run: uv sync --locked
 
-      - name: Compile Application
+      - name: Create test application
+        shell: bash
+        run: |
+          mkdir -p build-test
+          printf 'print("CleanSheet release workflow test")\n' > build-test/main.py
+
+      - name: Compile Test Application
         shell: bash
         run: |
           uv run python -m nuitka \
             --onefile \
-            --enable-plugin=tk-inter \
-            --include-data-dir=assets=assets \
-            --assume-yes-for-downloads \
             --output-filename="${{ matrix.output_name }}" \
-            ${{ matrix.flags }} \
-            src/cleansheet/main.py
+            build-test/main.py
+
+      # - name: Compile Application
+      #   shell: bash
+      #   run: |
+      #     uv run python -m nuitka \
+      #       --onefile \
+      #       --enable-plugin=tk-inter \
+      #       --include-data-dir=assets=assets \
+      #       --assume-yes-for-downloads \
+      #       --output-filename="${{ matrix.output_name }}" \
+      #       ${{ matrix.flags }} \
+      #       src/cleansheet/main.py
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7
