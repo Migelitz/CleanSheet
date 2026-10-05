@@ -61,6 +61,7 @@ jobs:
         run: |
           uv run python -m nuitka \
             --onefile \
+            --assume-yes-for-downloads \
             --output-filename="${{ matrix.output_name }}" \
             build-test/main.py
 
