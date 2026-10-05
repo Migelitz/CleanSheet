@@ -1,11 +1,15 @@
-name: Format Check
+name: Check Security Vulnerabilities
 
 on:
   push:
+    branches: [main]
   pull_request:
+  schedule:
+    - cron: "0 0 * * 1"
 
 jobs:
-  format:
+  dependency-audit:
+    name: Dependency Audit
     runs-on: ubuntu-latest
 
     steps:
@@ -22,5 +26,8 @@ jobs:
         with:
           python-version-file: ".python-version"
 
-      - name: Check Formatting
-        run: uv run ruff format --check .
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Check for dependency vulnerabilities
+        run: uv audit
