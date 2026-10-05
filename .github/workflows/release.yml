@@ -95,3 +95,4 @@ jobs:
             release/CleanSheet \
             --title "CleanSheet ${{ inputs.version }}" \
             --generate-notes\
+            --draft
